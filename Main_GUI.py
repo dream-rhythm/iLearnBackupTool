@@ -1,5 +1,6 @@
 import sys
 from bs4 import BeautifulSoup
+import subprocess
 import requests
 from PyQt5.QtWidgets import QApplication, QMainWindow, QAction, qApp, QWidget,QMessageBox
 from PyQt5.QtWidgets import  QPushButton, QHBoxLayout, QVBoxLayout
@@ -20,7 +21,13 @@ class myGUI(QMainWindow):
         self.initUI()
 
     def checkUpdate(self):
-        pass
+        s = requests.Session()
+        versionFile = s.get('https://raw.githubusercontent.com/fcu-d0441320/iLearnBackupTool/master/version.ini')
+        version = float(versionFile.text)
+        if version > self.version:
+            subprocess.Popen('Updater.exe')
+            sys.exit()
+
     def initUI(self):
 
         self.setGeometry(300, 300, 250, 150)
