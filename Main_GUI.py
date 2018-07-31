@@ -2,6 +2,7 @@ import sys
 from bs4 import BeautifulSoup
 import subprocess
 import requests
+import img_qr
 from PyQt5.QtWidgets import QApplication, QMainWindow, QAction, qApp, QWidget,QMessageBox
 from PyQt5.QtWidgets import  QPushButton, QHBoxLayout, QVBoxLayout
 from PyQt5.QtGui import QIcon
@@ -34,13 +35,13 @@ class myGUI(QMainWindow):
         self.setWindowTitle('iLearn備份工具')
         self.statusbar.showMessage('備份工具啟動中...')
 
-        exitAct = QAction(QIcon('img/exit.png'), '關閉工具', self)
+        exitAct = QAction(QIcon(':img/exit.png'), '關閉工具', self)
         exitAct.setShortcut('Ctrl+Q')
         exitAct.setStatusTip('關閉工具')
         exitAct.triggered.connect(qApp.quit)
         self.toolbar.addAction(exitAct)
 
-        infoAct = QAction(QIcon('img/info.png'), '關於', self)
+        infoAct = QAction(QIcon(':img/info.png'), '關於', self)
         infoAct.setShortcut('Ctrl+I')
         infoAct.setStatusTip('關於')
         infoAct.triggered.connect(self.showInformation)
@@ -50,7 +51,7 @@ class myGUI(QMainWindow):
         self.TestiLearnConnection()
 
     def showInformation(self):
-        QMessageBox.about (self, '關於', 'iLearn備份工具\n工具版本：'+str(self.version),
+        QMessageBox.about (self, '關於', 'iLearn備份工具\n工具版本：'+str(self.version)
                              )
 
     def TestiLearnConnection(self):
