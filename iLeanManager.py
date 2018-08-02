@@ -1,14 +1,15 @@
 import requests
 from bs4 import BeautifulSoup
 class iLearnManager():
-    def __init__(self):
+    def __init__(self,host):
         self.web = requests.Session()
+        self.host = host
         self.NID = ""
         self.Pass = ""
         self.courseList=[]
 
     def TestConnection(self):
-        page = self.web.get("https://ilearn2.fcu.edu.tw/login/index.php")
+        page = self.web.get(self.host+"/login/index.php")
         html = BeautifulSoup(page.text, 'lxml')
         form_login = html.find('form', id='login')
         if form_login != None:
@@ -22,7 +23,7 @@ class iLearnManager():
 
     def Login(self):
         payload = {'username': self.NID, 'password': self.Pass}
-        page = self.web.post('https://ilearn2.fcu.edu.tw/login/index.php', data=payload)
+        page = self.web.post(self.host+'/login/index.php', data=payload)
         html = BeautifulSoup(page.text, 'lxml')
         img_userpicture = html.find('img', {'class':'userpicture'})
         if img_userpicture != None:
@@ -32,7 +33,7 @@ class iLearnManager():
             return False,''
 
     def getCourseList(self):
-        r = self.web.get("http://ilearn2.fcu.edu.tw/")
+        r = self.web.get(self.host)
         soup = BeautifulSoup(r.text, 'lxml')
         div_course = soup.find_all('div', {"style": "font-size:1.1em;font-weight:bold;line-height:20px;"})
         CourseList = [div.a.attrs for div in div_course if 'class' not in div.a.attrs]
@@ -43,7 +44,7 @@ class iLearnManager():
         return CourseList
 
     def getCourseMainResourceList(self,classInfo):
-        r = self.web.get('http://ilearn2.fcu.edu.tw/course/view.php?id=' + classInfo['id'])
+        r = self.web.get(self.host+'/course/view.php?id=' + classInfo['id'])
         soup = BeautifulSoup(r.text, 'lxml')
         div_section = soup.find_all('li', {"class": "section main clearfix"})
         ResourceList = []
@@ -63,7 +64,7 @@ class iLearnManager():
                 ResourceList.append({'path': path, 'mod': mod, 'mod_id': mod_id, 'name': mod_name})
         return ResourceList
 
-    def getCourseFile(self,classInfo):
+    def getCourseFileList(self,classInfo):
         MainResourceList = self.getCourseMainResourceList(classInfo)
 
         pass

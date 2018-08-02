@@ -15,8 +15,9 @@ class myGUI(QMainWindow):
         self.version = 0.1
         with open('version.ini',mode='w') as f:
             f.write(str(self.version))
+        self.host='https://ilearn2.fcu.edu.tw'
         self.checkUpdate()
-        self.web = iLearnManager()
+        self.web = iLearnManager(self.host)
         self.statusbar = self.statusBar()
         self.toolbar = self.addToolBar('toolBar')
         self.initUI()
@@ -184,7 +185,7 @@ class myGUI(QMainWindow):
                     backupList.append(course)
         fileList = []
         for course in backupList:
-            fileList.extend(self.web.getCourseFile(course))
+            fileList.extend(self.web.getCourseFileList(course))
         pass
 
     def showInformation(self):
