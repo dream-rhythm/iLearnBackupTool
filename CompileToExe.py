@@ -12,11 +12,9 @@ with open('img.qrc',mode='w') as f:
     f.write('</qresource>\n')
     f.write('</RCC>\n')
 
-PyQt5Path = 'platforms/'
 os.system('pyrcc5 -o img_qr.py img.qrc')
-os.system('pyinstaller --hidden-import=PyQt5.sip -F -w --clean Main_GUI.py ')
+os.system('pyinstaller --hidden-import=PyQt5.sip -F --clean Main_GUI.py ')
 #os.system('pyinstaller -F Main_GUI.spec')
-
 os.system('copy dist\Main_GUI.exe iLearnBackupTool.exe')
 os.system('rmdir /Q /S dist')
 os.system('rmdir /Q /S build')

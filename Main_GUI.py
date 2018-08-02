@@ -2,9 +2,11 @@ import sys
 import subprocess
 import requests
 import img_qr
+import _thread
+import time
 from iLeanManager import iLearnManager
 from PyQt5.QtWidgets import QApplication, QMainWindow, QAction, qApp, QMessageBox
-from PyQt5.QtWidgets import QGridLayout, QVBoxLayout,QGroupBox,QDesktopWidget,QWidget
+from PyQt5.QtWidgets import QGridLayout, QVBoxLayout,QGroupBox,QDesktopWidget,QWidget,QTableWidgetItem
 from PyQt5.QtWidgets import QLabel, QLineEdit,QPushButton,QRadioButton,QCheckBox,QTableWidget
 from PyQt5.QtGui import QIcon
 
@@ -75,9 +77,14 @@ class myGUI(QMainWindow):
 
     def createStatusTable(self):
         self.StatusTable = QTableWidget()
-        self.StatusTable.setColumnCount(3)
-        horizontalHeader = ["儲存路徑", "檔案模組", "下載進度"]
+        self.StatusTable.setColumnCount(4)
+        horizontalHeader = ["檔案名稱","儲存路徑", "檔案模組", "下載進度"]
         self.StatusTable.setHorizontalHeaderLabels(horizontalHeader)
+        self.StatusTable.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.StatusTable.setColumnWidth(0, 140)
+        self.StatusTable.setColumnWidth(1, 120)
+        self.StatusTable.setColumnWidth(2, 120)
+        self.StatusTable.setColumnWidth(3, 400)
         return self.StatusTable
 
     def createLoginGroup(self):
@@ -171,22 +178,46 @@ class myGUI(QMainWindow):
             self.CourseListBox.addWidget(checkBox)
         self.btn_StartBackup.setEnabled(True)
 
-    def StartBackup(self):
-        backupList=[]
-        items = [self.CourseListBox.itemAt(i).widget() for i in range(1,self.CourseListBox.count())]
+    def showFileList(self):
+        backupList = []
+        items = [self.CourseListBox.itemAt(i).widget() for i in range(1, self.CourseListBox.count())]
         for idx in range(len(items)):
             checkbox = items[idx]
-            if isinstance(checkbox,QCheckBox):
+            if isinstance(checkbox, QCheckBox):
                 for ele in self.courseList:
-                    if ele['title']==checkbox.text():
+                    if ele['title'] == checkbox.text():
                         course = ele
                         break
                 if checkbox.isChecked():
                     backupList.append(course)
-        fileList = []
+        time.sleep(1)
+        self.fileList = []
+        i=1
         for course in backupList:
-            fileList.extend(self.web.getCourseFileList(course))
-        pass
+            coursefile = self.web.getCourseFileList(course)
+            self.btn_StartBackup.setText('正在獲取檔案清單中,請稍後...('+str(i)+'/'+str(len(backupList))+')')
+            i+=1
+            self.fileList.extend(coursefile)
+            for ele in coursefile:
+                row_count = self.StatusTable.rowCount()
+                self.StatusTable.insertRow(row_count)
+                self.StatusTable.setItem(row_count, 0, QTableWidgetItem(ele['name']))
+                self.StatusTable.setItem(row_count, 1, QTableWidgetItem(ele['path']))
+                self.StatusTable.setItem(row_count, 2, QTableWidgetItem(ele['mod']))
+                self.StatusTable.setItem(row_count, 3, QTableWidgetItem('等待中...'))
+        self.btn_StartBackup.setText('正在開始下載,請稍後...(0/' + str(len(self.fileList)) + ')')
+
+    def StartBackup(self):
+        self.btn_StartBackup.setText('正在獲取檔案清單中,請稍後...')
+        self.btn_StartBackup.setEnabled(False)
+        items = [self.CourseListBox.itemAt(i).widget() for i in range(1, self.CourseListBox.count())]
+        for idx in range(len(items)):
+            checkbox = items[idx]
+            if isinstance(checkbox, QCheckBox):
+                checkbox.setEnabled(False)
+        _thread.start_new_thread(self.showFileList, ())
+
+
 
     def showInformation(self):
         QMessageBox.about (self, '關於', 'iLearn備份工具\n工具版本：'+str(self.version))

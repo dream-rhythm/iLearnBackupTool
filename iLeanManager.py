@@ -50,21 +50,62 @@ class iLearnManager():
         ResourceList = []
         for section in div_section:
             section_name = section.find_all('h3', {'class': 'sectionname'})[0].text
-            UrlList = section.contents[2].ul.contents
+            try:
+                UrlList = section.contents[2].ul.contents
+            except:
+                UrlList=[]
             for url in UrlList:
-                url = url.find_all('a')[0]
-                href = url.get('href')
-                mod = url.get('href').split('/mod/')[1].split('/view')[0]
-                mod_id = url.get('href').split('?id=')[1].split('"')[0]
-                mod_name = url.find_all('span', {'class': 'instancename'})[0]
-                if mod_name.span != None:
-                    mod_name.span.decompose()
-                mod_name = mod_name.text
-                path = classInfo['title'] + '/' + section_name + '/' + mod_name
-                ResourceList.append({'path': path, 'mod': mod, 'mod_id': mod_id, 'name': mod_name})
+                try:
+                    url = url.find_all('a')[0]
+                    href = url.get('href')
+                    mod = url.get('href').split('/mod/')[1].split('/view')[0]
+                    mod_id = url.get('href').split('?id=')[1].split('"')[0]
+                    mod_name = url.find_all('span', {'class': 'instancename'})[0]
+                    if mod_name.span != None:
+                        mod_name.span.decompose()
+                    mod_name = mod_name.text
+                    path = classInfo['title'] + '/' + self.removeIllageWord(section_name) + '/' + self.removeIllageWord(mod_name)
+                    ResourceList.append({'path': path, 'mod': mod, 'mod_id': mod_id, 'name': self.removeIllageWord(mod_name)})
+                except:
+                    pass
         return ResourceList
+
+    def removeIllageWord(self,string):
+        for ele in ['/\\*|?:"']:
+            while ele in string:
+                string = string.raplace('ele','-')
+        while '<' in string:
+            string = string.raplace('ele','(')
+        while '>' in string:
+            string = string.raplace('ele',')')
+        return string
 
     def getCourseFileList(self,classInfo):
         MainResourceList = self.getCourseMainResourceList(classInfo)
+        FileList=[]
+        for recource in MainResourceList:
+            if recource['mod']=='forum':
+                FileList.extend(self.getFileList_forum(recource))
+            elif recource['mod'] in ['url','resource','assign','page','videos']:
+                FileList.append(recource)
+            elif recource['mod']=='folder':
+                FileList.extend(self.getFileList_folder(recource))
+            else:
+                print('Not support',recource['mod'],'mod:',recource['name'])
+        return FileList
 
-        pass
+    def getFileList_forum(self,info):
+        FileList = []
+        r = self.web.get('https://ilearn2.fcu.edu.tw/mod/forum/view.php?id=' + info['mod_id'])
+        soup = BeautifulSoup(r.text, 'lxml')
+        allTopic = soup.find_all('td', {'class': 'topic starter'})
+        for topic in allTopic:
+            path = info['path'] + '/' + self.removeIllageWord(topic.text)
+            mod = 'forum/discuss'
+            mod_id = topic.a.get('href').split('d=')[1]
+            name = self.removeIllageWord(topic.text)
+            FileList.append({'path': path, 'mod': mod, 'mod_id': mod_id, 'name': name})
+        return FileList
+
+    def getFileList_folder(self,info):
+        return []
