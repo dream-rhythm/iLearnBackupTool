@@ -1,5 +1,5 @@
 import requests
-import sys
+from sys import stdout
 
 durl = 'https://raw.githubusercontent.com/fcu-d0441320/iLearnBackupTool/master/iLearnBackupTool.exe'
 with requests.get(durl, stream=True) as dlink, open('iLearnBackupTool.exe', 'wb') as binfile:
@@ -14,11 +14,12 @@ with requests.get(durl, stream=True) as dlink, open('iLearnBackupTool.exe', 'wb'
     recived_size = 0
 
     # start download
-    sys.stdout.write('[{:50s}] {:d}%'.format('', 0))
+    stdout.write('[{:50s}] {:d}%'.format('', 0))
+    stdout.flush()
     # print per. 2% content recived
     for i, content in enumerate(dlink.iter_content(chunk_size=batch_size)):
-        sys.stdout.write('\r[{:<50s}] {:d}%'.format('='*i, i*2))
-        sys.stdout.flush()
+        stdout.write('\r[{:<50s}] {:d}%'.format('='*i, i*2))
+        stdout.flush()
         # update contect has recived
         recived_size += binfile.write(content)
         if recived_size == total_size:
