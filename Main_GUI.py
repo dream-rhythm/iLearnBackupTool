@@ -16,8 +16,6 @@ class myGUI(QMainWindow):
         with open('version.ini',mode='w') as f:
             f.write(str(self.version))
         self.checkUpdate()
-        #self.grid = QGridLayout()
-
         self.web = iLearnManager()
         self.statusbar = self.statusBar()
         self.toolbar = self.addToolBar('toolBar')
@@ -76,8 +74,8 @@ class myGUI(QMainWindow):
 
     def createStatusTable(self):
         self.StatusTable = QTableWidget()
-        self.StatusTable.setColumnCount(5)
-        horizontalHeader = ["課程", "區塊", "檔案名稱", "檔案模組", "下載進度"]
+        self.StatusTable.setColumnCount(3)
+        horizontalHeader = ["儲存路徑", "檔案模組", "下載進度"]
         self.StatusTable.setHorizontalHeaderLabels(horizontalHeader)
         return self.StatusTable
 
@@ -165,14 +163,28 @@ class myGUI(QMainWindow):
             self.label_iLearn.setText('登入失敗')
 
     def ShowCourseList(self):
-        courseList = self.web.getCourseList()
-        for course in courseList:
+        self.courseList = self.web.getCourseList()
+        for course in self.courseList:
             checkBox = QCheckBox(course['title'])
             checkBox.setChecked(True)
             self.CourseListBox.addWidget(checkBox)
         self.btn_StartBackup.setEnabled(True)
 
     def StartBackup(self):
+        backupList=[]
+        items = [self.CourseListBox.itemAt(i).widget() for i in range(1,self.CourseListBox.count())]
+        for idx in range(len(items)):
+            checkbox = items[idx]
+            if isinstance(checkbox,QCheckBox):
+                for ele in self.courseList:
+                    if ele['title']==checkbox.text():
+                        course = ele
+                        break
+                if checkbox.isChecked():
+                    backupList.append(course)
+        fileList = []
+        for course in backupList:
+            fileList.extend(self.web.getCourseFile(course))
         pass
 
     def showInformation(self):
