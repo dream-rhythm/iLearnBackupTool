@@ -1,14 +1,26 @@
 import requests
 from bs4 import BeautifulSoup
-class iLearnManager():
-    def __init__(self,host):
+import FileDownloader
+from PyQt5.QtWidgets import QWidget
+from PyQt5.QtCore import pyqtSignal
+class iLearnManager(QWidget):
+    signal_finishDownload = pyqtSignal()
+    def __init__(self):
+        super(iLearnManager,self).__init__()
         self.web = requests.Session()
-        self.host = host
         self.NID = ""
         self.Pass = ""
         self.courseList=[]
 
+    def setInformation(self,host,LogSpace):
+        self.host = host
+        self.LogSpace = LogSpace
+
+    def print(self,msg):
+        self.LogSpace.appendPlainText(msg)
+
     def TestConnection(self):
+        self.print('正在測試與iLearn的連線...')
         page = self.web.get(self.host+"/login/index.php")
         html = BeautifulSoup(page.text, 'lxml')
         form_login = html.find('form', id='login')
@@ -64,20 +76,20 @@ class iLearnManager():
                     if mod_name.span != None:
                         mod_name.span.decompose()
                     mod_name = mod_name.text
-                    path = classInfo['title'] + '/' + self.removeIllageWord(section_name) + '/' + self.removeIllageWord(mod_name)
+                    path = classInfo['title'] + '/' + self.removeIllageWord(section_name)
                     ResourceList.append({'path': path, 'mod': mod, 'mod_id': mod_id, 'name': self.removeIllageWord(mod_name)})
                 except:
                     pass
         return ResourceList
 
     def removeIllageWord(self,string):
-        for ele in ['/\\*|?:"']:
+        for ele in '/\\*|?:"':
             while ele in string:
-                string = string.raplace('ele','-')
+                string = string.replace(ele,'-')
         while '<' in string:
-            string = string.raplace('ele','(')
+            string = string.replace(ele,'(')
         while '>' in string:
-            string = string.raplace('ele',')')
+            string = string.replace(ele,')')
         return string
 
     def getCourseFileList(self,classInfo):
@@ -109,3 +121,12 @@ class iLearnManager():
 
     def getFileList_folder(self,info):
         return []
+
+    def DownloadFile(self,StatusTable,index,fileInfo):
+        downloader = FileDownloader.BasicDownloader()
+        downloader.setInformation(self.web, fileInfo, StatusTable, index)
+        downloader.signal_finishDownload.connect(self.finishDownload)
+        downloader.download()
+
+    def finishDownload(self):
+        self.signal_finishDownload.emit()
