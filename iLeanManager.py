@@ -1,11 +1,13 @@
 import requests
 from bs4 import BeautifulSoup
+import time
 import FileDownloader
 from PyQt5.QtWidgets import QWidget
 from PyQt5.QtCore import pyqtSignal
 
 class iLearnManager(QWidget):
     signal_finishDownload = pyqtSignal()
+    signal_Log = pyqtSignal(str)
     def __init__(self):
         super(iLearnManager,self).__init__()
         self.web = requests.Session()
@@ -18,7 +20,7 @@ class iLearnManager(QWidget):
         self.LogSpace = LogSpace
 
     def print(self,msg):
-        self.LogSpace.appendPlainText(msg)
+        self.signal_Log.emit(msg)
 
     def TestConnection(self):
         self.print('正在測試與iLearn的連線...')
@@ -60,6 +62,8 @@ class iLearnManager(QWidget):
         r = self.web.get(self.host+'/course/view.php?id=' + classInfo['id'])
         soup = BeautifulSoup(r.text, 'lxml')
         div_section = soup.find_all('li', {"class": "section main clearfix"})
+        div_section_current = soup.find_all('li', {"class": "section main clearfix current"})
+        div_section.extend(div_section_current)
         ResourceList = []
         for section in div_section:
             section_name = section.find_all('h3', {'class': 'sectionname'})[0].text
@@ -111,9 +115,10 @@ class iLearnManager(QWidget):
         FileList = []
         r = self.web.get('https://ilearn2.fcu.edu.tw/mod/forum/view.php?id=' + info['mod_id'])
         soup = BeautifulSoup(r.text, 'lxml')
+        folderName = soup.find_all('div',{'role':'main'})[0].h2.text
         allTopic = soup.find_all('td', {'class': 'topic starter'})
         for topic in allTopic:
-            path = info['path'] + '/' + self.removeIllageWord(topic.text)
+            path = info['path'] + '/' +folderName +'/'+self.removeIllageWord(topic.text)
             mod = 'forum/discuss'
             mod_id = topic.a.get('href').split('d=')[1]
             name = self.removeIllageWord(topic.text)
@@ -124,10 +129,17 @@ class iLearnManager(QWidget):
         return []
 
     def DownloadFile(self,StatusTable,index,fileInfo):
-        downloader = FileDownloader.BasicDownloader()
+        if fileInfo['mod']=='forum/discuss':
+            downloader = FileDownloader.discuss()
+        else:
+            downloader = FileDownloader.BasicDownloader()
         downloader.setInformation(self.web, fileInfo, StatusTable, index)
-        downloader.signal_finishDownload.connect(self.finishDownload)
+        downloader.signal_downloadNextFile.connect(self.finishDownload)
+        downloader.signal_errorMsg.connect(self.showErrorMsg)
         downloader.download()
 
     def finishDownload(self):
         self.signal_finishDownload.emit()
+
+    def showErrorMsg(self,Msg):
+        self.print(Msg)

@@ -2,6 +2,7 @@ import sys
 import subprocess
 import requests
 import img_qr
+import time
 import _thread
 from iLeanManager import iLearnManager
 from functools import partial
@@ -77,6 +78,7 @@ class myGUI(QMainWindow):
         self.web = iLearnManager()
         self.web.setInformation(self.host, self.LogSpace)
         self.web.signal_finishDownload.connect(self.startDownload)
+        self.web.signal_Log.connect(self.print)
 
         self.show()
         self.TestiLearnConnection()
@@ -98,8 +100,8 @@ class myGUI(QMainWindow):
         self.LogSpace.setReadOnly(True)
         return self.LogSpace
 
-    def print(self,msg,toLogFile=False):
-        self.LogSpace.appendPlainText(msg)
+    def print(self,msg):
+        self.LogSpace.appendPlainText(time.strftime("[%H:%M:%S]", time.localtime()) +msg)
 
     def createStatusView(self):
         tabs = QTabWidget()
