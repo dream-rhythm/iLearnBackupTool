@@ -1,0 +1,7 @@
+<RCC>
+<qresource>
+<file alias="img/exit.png">img/exit.png</file>
+<file alias="img/FinishDownload.png">img/FinishDownload.png</file>
+<file alias="img/info.png">img/info.png</file>
+</qresource>
+</RCC>
