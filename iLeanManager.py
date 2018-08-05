@@ -1,13 +1,14 @@
 import requests
 from bs4 import BeautifulSoup
-import time
 import FileDownloader
 from PyQt5.QtWidgets import QWidget
 from PyQt5.QtCore import pyqtSignal
 
+
 class iLearnManager(QWidget):
     signal_finishDownload = pyqtSignal()
     signal_Log = pyqtSignal(str)
+
     def __init__(self):
         super(iLearnManager,self).__init__()
         self.web = requests.Session()
@@ -15,7 +16,7 @@ class iLearnManager(QWidget):
         self.Pass = ""
         self.courseList=[]
 
-    def setInformation(self,host,LogSpace):
+    def setInformation(self, host, LogSpace):
         self.host = host
         self.LogSpace = LogSpace
 
@@ -27,12 +28,13 @@ class iLearnManager(QWidget):
         page = self.web.get(self.host+"/login/index.php")
         html = BeautifulSoup(page.text, 'lxml')
         form_login = html.find('form', id='login')
-        if form_login != None:
+
+        if form_login is not None:
             return True
         else:
             return False
 
-    def setUser(self,NID,Password):
+    def setUser(self, NID, Password):
         self.NID = NID
         self.Pass = Password
 
@@ -41,11 +43,11 @@ class iLearnManager(QWidget):
         page = self.web.post(self.host+'/login/index.php', data=payload)
         html = BeautifulSoup(page.text, 'lxml')
         img_userpicture = html.find('img', {'class':'userpicture'})
-        if img_userpicture != None:
+        if img_userpicture is not None:
             userName = img_userpicture.get('title').split(' ')[1][:-3]
-            return True,userName
+            return True, userName
         else:
-            return False,''
+            return False, ''
 
     def getCourseList(self):
         r = self.web.get(self.host)
@@ -58,7 +60,7 @@ class iLearnManager(QWidget):
         self.courseList = CourseList
         return CourseList
 
-    def getCourseMainResourceList(self,classInfo):
+    def getCourseMainResourceList(self, classInfo):
         r = self.web.get(self.host+'/course/view.php?id=' + classInfo['id'])
         soup = BeautifulSoup(r.text, 'lxml')
         div_section = soup.find_all('li', {"class": "section main clearfix"})
@@ -70,7 +72,7 @@ class iLearnManager(QWidget):
             try:
                 UrlList = section.contents[2].ul.contents
             except:
-                UrlList=[]
+                UrlList = []
             for url in UrlList:
                 try:
                     url = url.find_all('a')[0]
@@ -78,7 +80,7 @@ class iLearnManager(QWidget):
                     mod = url.get('href').split('/mod/')[1].split('/view')[0]
                     mod_id = url.get('href').split('?id=')[1].split('"')[0]
                     mod_name = url.find_all('span', {'class': 'instancename'})[0]
-                    if mod_name.span != None:
+                    if mod_name.span is not None:
                         mod_name.span.decompose()
                     mod_name = mod_name.text
                     path = classInfo['title'] + '/' + self.removeIllageWord(section_name)
@@ -87,49 +89,50 @@ class iLearnManager(QWidget):
                     pass
         return ResourceList
 
-    def removeIllageWord(self,string):
+    def removeIllageWord(self, string):
         for ele in '/\\*|?:"':
             while ele in string:
-                string = string.replace(ele,'-')
+                string = string.replace(ele, '-')
         while '<' in string:
-            string = string.replace(ele,'(')
+            string = string.replace(ele, '(')
         while '>' in string:
-            string = string.replace(ele,')')
+            string = string.replace(ele, ')')
         return string
 
-    def getCourseFileList(self,classInfo):
+    def getCourseFileList(self, classInfo):
         MainResourceList = self.getCourseMainResourceList(classInfo)
         FileList=[]
+
         for recource in MainResourceList:
             if recource['mod']=='forum':
                 FileList.extend(self.getFileList_forum(recource))
-            elif recource['mod'] in ['url','resource','assign','page','videos']:
+            elif recource['mod'] in ['url', 'resource', 'assign', 'page', 'videos']:
                 FileList.append(recource)
-            elif recource['mod']=='folder':
+            elif recource['mod'] == 'folder':
                 FileList.extend(self.getFileList_folder(recource))
             else:
-                print('Not support',recource['mod'],'mod:',recource['name'])
+                print('Not support', recource['mod'], 'mod:', recource['name'])
         return FileList
 
-    def getFileList_forum(self,info):
+    def getFileList_forum(self, info):
         FileList = []
         r = self.web.get('https://ilearn2.fcu.edu.tw/mod/forum/view.php?id=' + info['mod_id'])
         soup = BeautifulSoup(r.text, 'lxml')
-        folderName = soup.find_all('div',{'role':'main'})[0].h2.text
+        folderName = soup.find_all('div',{'role': 'main'})[0].h2.text
         allTopic = soup.find_all('td', {'class': 'topic starter'})
         for topic in allTopic:
-            path = info['path'] + '/' +folderName +'/'+self.removeIllageWord(topic.text)
+            path = info['path'] + '/' + folderName + '/ '+self.removeIllageWord(topic.text)
             mod = 'forum/discuss'
             mod_id = topic.a.get('href').split('d=')[1]
             name = self.removeIllageWord(topic.text)
             FileList.append({'path': path, 'mod': mod, 'mod_id': mod_id, 'name': name})
         return FileList
 
-    def getFileList_folder(self,info):
+    def getFileList_folder(self, info):
         return []
 
-    def DownloadFile(self,StatusTable,index,fileInfo):
-        if fileInfo['mod']=='forum/discuss':
+    def DownloadFile(self, StatusTable, index, fileInfo):
+        if fileInfo['mod'] == 'forum/discuss':
             downloader = FileDownloader.discuss()
         else:
             downloader = FileDownloader.BasicDownloader()
@@ -141,5 +144,5 @@ class iLearnManager(QWidget):
     def finishDownload(self):
         self.signal_finishDownload.emit()
 
-    def showErrorMsg(self,Msg):
+    def showErrorMsg(self, Msg):
         self.print(Msg)

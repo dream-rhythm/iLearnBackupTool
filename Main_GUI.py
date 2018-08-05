@@ -1,7 +1,6 @@
 import sys
 import subprocess
 import requests
-import img_qr
 import time
 import _thread
 from iLeanManager import iLearnManager
@@ -12,9 +11,12 @@ from PyQt5.QtWidgets import QDesktopWidget,QWidget,QTableWidgetItem, QTabWidget,
 from PyQt5.QtWidgets import QLabel, QLineEdit, QPushButton, QRadioButton, QCheckBox, QTableWidget
 from PyQt5.QtGui import QIcon
 from PyQt5 import QtCore
+# import img_qr
+
 
 class myGUI(QMainWindow):
     signal_startDownload = QtCore.pyqtSignal()
+
     def __init__(self):
         super().__init__()
         self.version = 0.1
@@ -26,7 +28,6 @@ class myGUI(QMainWindow):
         self.toolbar = self.addToolBar('toolBar')
         self.initUI()
         self.signal_startDownload.connect(self.startDownload)
-
 
     def checkUpdate(self):
         s = requests.Session()
@@ -100,7 +101,7 @@ class myGUI(QMainWindow):
         self.LogSpace.setReadOnly(True)
         return self.LogSpace
 
-    def print(self,msg):
+    def print(self, msg):
         self.LogSpace.appendPlainText(time.strftime("[%H:%M:%S]", time.localtime()) +msg)
 
     def createStatusView(self):
@@ -117,10 +118,10 @@ class myGUI(QMainWindow):
         label_Pass = QLabel("密碼:")
         self.input_Pass = QLineEdit()
         self.input_Pass.setEchoMode(QLineEdit.Password)
-        form.addWidget(label_NID,0,0)
-        form.addWidget(self.input_NID,0,1,1,2)
-        form.addWidget(label_Pass,1,0)
-        form.addWidget(self.input_Pass,1,1,1,2)
+        form.addWidget(label_NID, 0, 0)
+        form.addWidget(self.input_NID, 0, 1, 1, 2)
+        form.addWidget(label_Pass, 1, 0)
+        form.addWidget(self.input_Pass, 1, 1, 1, 2)
 
         self.btn_clean = QPushButton('清除', self)
         self.btn_clean.clicked[bool].connect(self.cleanLogin)
@@ -204,8 +205,8 @@ class myGUI(QMainWindow):
     def Login(self):
         self.web.setUser(self.input_NID.text(),self.input_Pass.text())
         self.print('使用者 '+self.input_NID.text()+' 登入中...')
-        status,UserName = self.web.Login()
-        if status == True:
+        status, UserName = self.web.Login()
+        if status:  # == True
             self.statusbar.showMessage('登入成功')
             self.label_iLearn.setText(UserName+' 已成功登入')
             self.print(UserName+' 已成功登入')
@@ -251,7 +252,7 @@ class myGUI(QMainWindow):
                 if checkbox.isChecked():
                     backupList.append(course)
         self.fileList = []
-        i=1
+        i = 1
         for course in backupList:
             coursefile = self.web.getCourseFileList(course)
             self.btn_StartBackup.setText('正在獲取檔案清單中,請稍後...('+str(i)+'/'+str(len(backupList))+')')
@@ -270,13 +271,12 @@ class myGUI(QMainWindow):
     def startDownload(self):
         if self.nowDownload < len(self.fileList):
             self.web.DownloadFile(self.StatusTable,self.nowDownload,self.fileList[self.nowDownload])
-            self.nowDownload+=1
+            self.nowDownload += 1
             self.btn_StartBackup.setText('正在下載...('+str(self.nowDownload)+'/'+str(len(self.fileList))+')')
             self.print('nowDownload='+str(self.nowDownload))
 
-
     def StartBackup(self):
-        if self.NumOfSelect==0:
+        if self.NumOfSelect == 0:
             self.btn_StartBackup.setText('請先選擇課程再按開始備份!')
         else:
             self.btn_selectAll.setEnabled(False)
@@ -290,15 +290,13 @@ class myGUI(QMainWindow):
                     checkbox.setEnabled(False)
             _thread.start_new_thread(self.showFileList, ())
 
-
-
     def showInformation(self):
-        QMessageBox.about (self, '關於', 'iLearn備份工具\n工具版本：'+str(self.version))
+        QMessageBox.about(self, '關於', 'iLearn備份工具\n工具版本：'+str(self.version))
 
     def TestiLearnConnection(self):
         self.statusbar.showMessage('正在測試iLearn2的連線...')
         self.label_iLearn.setText('連線中...')
-        if self.web.TestConnection() == True:
+        if self.web.TestConnection():   # ==Ture
             self.statusbar.showMessage('iLearn2連線成功!')
             self.label_iLearn.setText('連線成功!')
         else:

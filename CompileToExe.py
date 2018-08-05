@@ -1,5 +1,7 @@
 import os
-with open('img.qrc',mode='w') as f:
+
+
+with open('img.qrc', mode='w') as f:
     f.write('<RCC>\n')
     f.write('<qresource>\n')
     for path,dic,files in os.walk('img'):
@@ -14,7 +16,7 @@ with open('img.qrc',mode='w') as f:
 
 os.system('pyrcc5 -o img_qr.py img.qrc')
 os.system('pyinstaller --hidden-import=PyQt5.sip -F --clean Main_GUI.py ')
-#os.system('pyinstaller -F Main_GUI.spec')
+# os.system('pyinstaller -F Main_GUI.spec')
 os.system('copy dist\Main_GUI.exe iLearnBackupTool.exe')
 os.system('rmdir /Q /S dist')
 os.system('rmdir /Q /S build')
