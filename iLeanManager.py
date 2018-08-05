@@ -8,17 +8,15 @@ from PyQt5.QtCore import pyqtSignal
 class iLearnManager(QWidget):
     signal_finishDownload = pyqtSignal()
     signal_Log = pyqtSignal(str)
+    signal_FinishGetCourseResource = pyqtSignal(list)
 
-    def __init__(self):
+    def __init__(self, host='http://ilearn2.fcu.edu.tw'):
         super(iLearnManager,self).__init__()
         self.web = requests.Session()
         self.NID = ""
         self.Pass = ""
         self.courseList=[]
-
-    def setInformation(self, host, LogSpace):
         self.host = host
-        self.LogSpace = LogSpace
 
     def print(self,msg):
         self.signal_Log.emit(msg)
@@ -41,7 +39,7 @@ class iLearnManager(QWidget):
     def Login(self):
         payload = {'username': self.NID, 'password': self.Pass}
         page = self.web.post(self.host+'/login/index.php', data=payload)
-        html = BeautifulSoup(page.text, 'lxml')
+        html = BeautifulSoup(page.text, 'html.parser')
         img_userpicture = html.find('img', {'class':'userpicture'})
         if img_userpicture is not None:
             userName = img_userpicture.get('title').split(' ')[1][:-3]
@@ -51,7 +49,7 @@ class iLearnManager(QWidget):
 
     def getCourseList(self):
         r = self.web.get(self.host)
-        soup = BeautifulSoup(r.text, 'lxml')
+        soup = BeautifulSoup(r.text, 'html.parser')
         div_course = soup.find_all('div', {"style": "font-size:1.1em;font-weight:bold;line-height:20px;"})
         CourseList = [div.a.attrs for div in div_course if 'class' not in div.a.attrs]
         for ele in CourseList:
@@ -62,31 +60,36 @@ class iLearnManager(QWidget):
 
     def getCourseMainResourceList(self, classInfo):
         r = self.web.get(self.host+'/course/view.php?id=' + classInfo['id'])
-        soup = BeautifulSoup(r.text, 'lxml')
-        div_section = soup.find_all('li', {"class": "section main clearfix"})
-        div_section_current = soup.find_all('li', {"class": "section main clearfix current"})
-        div_section.extend(div_section_current)
+        soup = BeautifulSoup(r.text, 'html.parser')
+        div_main = soup.find_all('ul', {"class": "topics"})[0]
+        div_section = div_main.find_all('li',{'role':'region'})
         ResourceList = []
         for section in div_section:
-            section_name = section.find_all('h3', {'class': 'sectionname'})[0].text
+            try:
+                section_name = section.find_all('h3', {'class': 'sectionname'})[0].text
+            except:
+                section_name = section.get('aria-label')
             try:
                 UrlList = section.contents[2].ul.contents
             except:
                 UrlList = []
+            resourceInSection=[]
             for url in UrlList:
                 try:
                     url = url.find_all('a')[0]
                     href = url.get('href')
-                    mod = url.get('href').split('/mod/')[1].split('/view')[0]
-                    mod_id = url.get('href').split('?id=')[1].split('"')[0]
+                    mod = href.split('/mod/')[1].split('/view')[0]
+                    mod_id = href.split('?id=')[1].split('"')[0]
                     mod_name = url.find_all('span', {'class': 'instancename'})[0]
                     if mod_name.span is not None:
                         mod_name.span.decompose()
                     mod_name = mod_name.text
                     path = classInfo['title'] + '/' + self.removeIllageWord(section_name)
-                    ResourceList.append({'path': path, 'mod': mod, 'mod_id': mod_id, 'name': self.removeIllageWord(mod_name)})
+                    resourceInSection.append({'path': path, 'mod': mod, 'mod_id': mod_id, 'name': self.removeIllageWord(mod_name)})
                 except:
                     pass
+            if len(resourceInSection) != 0:
+                ResourceList.append({'name':section_name,'mods':resourceInSection})
         return ResourceList
 
     def removeIllageWord(self, string):
@@ -103,15 +106,23 @@ class iLearnManager(QWidget):
         MainResourceList = self.getCourseMainResourceList(classInfo)
         FileList=[]
 
-        for recource in MainResourceList:
-            if recource['mod']=='forum':
-                FileList.extend(self.getFileList_forum(recource))
-            elif recource['mod'] in ['url', 'resource', 'assign', 'page', 'videos']:
-                FileList.append(recource)
-            elif recource['mod'] == 'folder':
-                FileList.extend(self.getFileList_folder(recource))
-            else:
-                print('Not support', recource['mod'], 'mod:', recource['name'])
+        for section in MainResourceList:
+            recourceList = []
+            for recource in section['mods']:
+                if recource['mod']=='forum':
+                    recource['data']=self.getFileList_forum(recource)
+                    recourceList.append(recource)
+                if recource['mod']=='resource':
+                    recource = self.getFileList_resource(recource)
+                    recourceList.append(recource)
+                elif recource['mod'] in ['url', 'assign', 'page', 'videos']:
+                    recourceList.append(recource)
+                elif recource['mod'] == 'folder':
+                    recource['data']=self.getFileList_folder(recource)
+                    recourceList.append(recource)
+                else:
+                    self.print('發現不支援的課程模組 '+recource['mod']+' mod: '+recource['name'])
+            FileList.append({'section':section['name'],'mods':recourceList})
         return FileList
 
     def getFileList_forum(self, info):
@@ -127,6 +138,16 @@ class iLearnManager(QWidget):
             name = self.removeIllageWord(topic.text)
             FileList.append({'path': path, 'mod': mod, 'mod_id': mod_id, 'name': name})
         return FileList
+
+    def getFileList_resource(self, info):
+        r = self.web.get('https://ilearn2.fcu.edu.tw/mod/resource/view.php?id=' + info['mod_id'])
+        soup = BeautifulSoup(r.text, 'lxml')
+        try:
+            filename = soup.find('div',{'class':'resourceworkaround'}).a.text
+        except:
+            filename = info['name']
+        info['name'] = filename
+        return info
 
     def getFileList_folder(self, info):
         return []

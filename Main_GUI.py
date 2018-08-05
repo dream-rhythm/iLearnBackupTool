@@ -3,33 +3,43 @@ import subprocess
 import requests
 import time
 import _thread
+from threading import Thread
 from iLeanManager import iLearnManager
 from functools import partial
 from PyQt5.QtWidgets import QApplication, QMainWindow, QAction, qApp, QMessageBox
-from PyQt5.QtWidgets import QGridLayout, QVBoxLayout, QGroupBox, QHBoxLayout
-from PyQt5.QtWidgets import QDesktopWidget,QWidget,QTableWidgetItem, QTabWidget, QPlainTextEdit
+from PyQt5.QtWidgets import QGridLayout, QVBoxLayout, QGroupBox, QHBoxLayout, QTreeWidget, QTreeWidgetItem
+from PyQt5.QtWidgets import QDesktopWidget,QWidget,QTableWidgetItem, QTabWidget, QPlainTextEdit, QAbstractItemView
 from PyQt5.QtWidgets import QLabel, QLineEdit, QPushButton, QRadioButton, QCheckBox, QTableWidget,QProgressBar
 from PyQt5.QtGui import QIcon
 from PyQt5 import QtCore
-# import img_qr
+from multiprocessing.pool import ThreadPool
+import img_qr
 
 
 class myGUI(QMainWindow):
     signal_startDownload = QtCore.pyqtSignal()
+    signal_loginSuccess = QtCore.pyqtSignal()
 
     def __init__(self):
         super().__init__()
         self.version = 0.1
-        with open('version.ini',mode='w') as f:
-            f.write(str(self.version))
-        self.host='https://ilearn2.fcu.edu.tw'
         self.checkUpdate()
+        self.host='https://ilearn2.fcu.edu.tw'
         self.statusbar = self.statusBar()
-        self.toolbar = self.addToolBar('toolBar')
         self.initUI()
+        self.web = iLearnManager(self.host)
+        self.init_iLearn()
         self.signal_startDownload.connect(self.startDownload)
+        self.signal_loginSuccess.connect(self.ShowResource)
+
+    def init_iLearn(self):
+        self.web.signal_finishDownload.connect(self.startDownload)
+        self.web.signal_Log.connect(self.print)
+        Thread(target=self.TestiLearnConnection())
 
     def checkUpdate(self):
+        with open('version.ini', mode='w') as f:
+            f.write(str(self.version))
         s = requests.Session()
         versionFile = s.get('https://raw.githubusercontent.com/fcu-d0441320/iLearnBackupTool/master/version.ini')
         version = float(versionFile.text)
@@ -51,19 +61,7 @@ class myGUI(QMainWindow):
         self.statusProcessBar = QProgressBar()
         self.statusProcessBar.setValue(0)
         self.statusProcessBar.setFormat("就緒...")
-        self.statusbar.addPermanentWidget(self.statusProcessBar,stretch=0)
-
-        exitAct = QAction(QIcon(':img/exit.png'), '關閉工具', self)
-        exitAct.setShortcut('Ctrl+Q')
-        exitAct.setStatusTip('關閉工具')
-        exitAct.triggered.connect(qApp.quit)
-        self.toolbar.addAction(exitAct)
-
-        infoAct = QAction(QIcon(':img/info.png'), '關於', self)
-        infoAct.setShortcut('Ctrl+I')
-        infoAct.setStatusTip('關於')
-        infoAct.triggered.connect(self.showInformation)
-        self.toolbar.addAction(infoAct)
+        self.statusbar.addPermanentWidget(self.statusProcessBar)
 
         self.grid = QGridLayout()
         widget = QWidget()
@@ -76,23 +74,18 @@ class myGUI(QMainWindow):
 
         self.grid.setColumnStretch(0,10)
         self.grid.setColumnStretch(1,20)
-        self.grid.setRowMinimumHeight(2,200)
         self.grid.setRowStretch(0, 10)
         self.grid.setRowStretch(1, 10)
         self.grid.setRowStretch(2, 10)
         self.web = iLearnManager()
-        self.web.setInformation(self.host, self.LogSpace)
-        self.web.signal_finishDownload.connect(self.startDownload)
-        self.web.signal_Log.connect(self.print)
 
         self.show()
-        self.TestiLearnConnection()
 
     def createStatusTable(self):
         self.StatusTable = QTableWidget()
         self.StatusTable.setColumnCount(4)
-        horizontalHeader = ["檔案名稱","儲存路徑", "檔案模組", "下載進度"]
-        self.StatusTable.setHorizontalHeaderLabels(horizontalHeader)
+        horizontal_header = ["檔案名稱","儲存路徑", "檔案模組", "下載進度"]
+        self.StatusTable.setHorizontalHeaderLabels(horizontal_header)
         self.StatusTable.setEditTriggers(QTableWidget.NoEditTriggers)
         self.StatusTable.setColumnWidth(0, 140)
         self.StatusTable.setColumnWidth(1, 120)
@@ -106,7 +99,7 @@ class myGUI(QMainWindow):
         return self.LogSpace
 
     def print(self, msg):
-        self.LogSpace.appendPlainText(time.strftime("[%H:%M:%S]", time.localtime()) +msg)
+        self.LogSpace.appendPlainText(time.strftime("[%H:%M:%S] ", time.localtime()) +msg)
 
     def createStatusView(self):
         tabs = QTabWidget()
@@ -178,22 +171,17 @@ class myGUI(QMainWindow):
 
         self.CourseListBox = QVBoxLayout()
         self.CourseListBox.addStretch(1)
-        self.btn_selectAll = QPushButton('全選',self)
-        self.btn_selectAll.setEnabled(False)
-        self.btn_selectAll.clicked[bool].connect(partial(self.selectAllAction,True))
-        self.btn_selectNone = QPushButton('全不選', self)
-        self.btn_selectNone.setEnabled(False)
-        self.btn_selectNone.clicked[bool].connect(partial(self.selectAllAction, False))
-        btnLayout = QVBoxLayout()
-        btnLayout.addWidget(self.btn_selectAll)
-        btnLayout.addWidget(self.btn_selectNone)
-        btnLayout.addStretch(1)
+
+        self.CourseTreeList = QTreeWidget()
+        self.CourseTreeList.setHeaderHidden(True)
+        self.CourseTreeList.setEnabled(False)
+        self.CourseTreeListRoot = QTreeWidgetItem(self.CourseTreeList)
+        self.CourseTreeListRoot.setText(0,"所有課程")
+        self.CourseTreeListRoot.setFlags(self.CourseTreeListRoot.flags()|QtCore.Qt.ItemIsTristate|QtCore.Qt.ItemIsUserCheckable)
+        self.CourseTreeListRoot.setCheckState(0, QtCore.Qt.Unchecked)
 
         HLayout = QHBoxLayout()
-        HLayout.addLayout(self.CourseListBox)
-        HLayout.addItem(btnLayout)
-        HLayout.setStretch(0,17)
-        HLayout.setStretch(1,3)
+        HLayout.addWidget(self.CourseTreeList)
 
         groupBox.setLayout(HLayout)
 
@@ -207,7 +195,11 @@ class myGUI(QMainWindow):
                 checkbox.setChecked(Check)
 
     def Login(self):
+        Thread(target = self.__Login())
+
+    def __Login(self):
         self.web.setUser(self.input_NID.text(),self.input_Pass.text())
+        self.label_iLearn.setText('使用者 '+self.input_NID.text()+' 登入中...')
         self.print('使用者 '+self.input_NID.text()+' 登入中...')
         status, UserName = self.web.Login()
         if status:  # == True
@@ -218,30 +210,63 @@ class myGUI(QMainWindow):
             self.input_NID.setEnabled(False)
             self.btn_login.setEnabled(False)
             self.btn_clean.setEnabled(False)
-            self.btn_selectAll.setEnabled(True)
-            self.btn_selectNone.setEnabled(True)
-            self.ShowCourseList()
+            self.signal_loginSuccess.emit()
         else:
             self.statusbar.showMessage('登入失敗')
             self.label_iLearn.setText('登入失敗')
             self.print(UserName + '登入失敗')
 
-    def ShowCourseList(self):
+    def ShowResource(self):
+        self.CourseTreeList.setEnabled(True)
         self.courseList = self.web.getCourseList()
-        self.NumOfSelect = 0
-        for course in self.courseList:
-            checkBox = QCheckBox(course['title'])
-            checkBox.setChecked(True)
-            checkBox.stateChanged.connect(partial(self.changeCheckedStatus))
-            self.CourseListBox.insertWidget(self.NumOfSelect,checkBox)
-            self.NumOfSelect+=1
-        self.btn_StartBackup.setEnabled(True)
+        self.statusProcessBar.setMaximum(len(self.courseList))
+        self.statusProcessBar.setValue(0)
+        self.statusProcessBar.setFormat('正在獲取課程資源...(%v/' + str(len(self.courseList)) + ')')
 
-    def changeCheckedStatus(self,checked):
-        if checked == QtCore.Qt.Unchecked:
-            self.NumOfSelect -= 1
-        elif checked == QtCore.Qt.Checked:
-            self.NumOfSelect += 1
+        self.fileList = []
+        for course in self.courseList:
+            courseItem = QTreeWidgetItem(self.CourseTreeListRoot)
+            self.CourseTreeListRoot.setExpanded(True)
+            courseItem.setFlags(courseItem.flags()|QtCore.Qt.ItemIsTristate|QtCore.Qt.ItemIsUserCheckable)
+            courseItem.setText(0,course['title'])
+            courseItem.setCheckState(0,QtCore.Qt.Unchecked)
+            courseItem.setIcon(0,QIcon(':img/mod.course.jpg'))
+        index = 0
+        for course in self.courseList:
+            t = Thread(target=self.ShowFileResource,args=(course,self.CourseTreeListRoot.child(index)))
+            t.run()
+            index += 1
+            self.statusProcessBar.setValue(index)
+
+    def ShowFileResource(self,course,courseItem):
+        courseFileList = self.web.getCourseFileList(course)
+        for section in courseFileList:
+            sectionItem = QTreeWidgetItem(courseItem)
+            sectionItem.setFlags(sectionItem.flags() | QtCore.Qt.ItemIsUserCheckable)
+            sectionItem.setText(0, section['section'])
+            sectionItem.setCheckState(0, QtCore.Qt.Unchecked)
+            sectionItem.setIcon(0,QIcon(":img/mod.folder.svg"))
+            for recource in section['mods']:
+                if recource['mod'] == 'forum':
+                    forumItem = QTreeWidgetItem(sectionItem)
+                    forumItem.setFlags(forumItem.flags() | QtCore.Qt.ItemIsUserCheckable)
+                    forumItem.setText(0, recource['name'])
+                    forumItem.setCheckState(0, QtCore.Qt.Unchecked)
+                    forumItem.setIcon(0,QIcon(":img/mod.discuss.svg"))
+                    for topic in recource['data']:
+                        topicItem = QTreeWidgetItem(forumItem)
+                        topicItem.setFlags(topicItem.flags() | QtCore.Qt.ItemIsUserCheckable)
+                        topicItem.setText(0, topic['name'])
+                        topicItem.setCheckState(0, QtCore.Qt.Unchecked)
+                        topicItem.setIcon(0,QIcon(":img/mod.discuss.svg"))
+                elif recource['mod'] in ['url', 'resource', 'assign', 'page', 'videos']:
+                    recourceItem = QTreeWidgetItem(sectionItem)
+                    recourceItem.setFlags(recourceItem.flags() | QtCore.Qt.ItemIsUserCheckable)
+                    recourceItem.setText(0, recource['name'])
+                    recourceItem.setCheckState(0, QtCore.Qt.Unchecked)
+                    recourceItem.setIcon(0,QIcon(":img/mod."+recource['mod']+".svg"))
+                elif recource['mod'] == 'folder':
+                    pass
 
     def showFileList(self):
         backupList = []

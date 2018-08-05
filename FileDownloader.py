@@ -1,6 +1,6 @@
 from os import makedirs,path                # 匯入系統路徑模組
 from bs4 import BeautifulSoup               # 匯入網頁分析模組
-# import img_qr                             # 匯入圖片
+import img_qr                             # 匯入圖片
 from PyQt5 import QtWidgets,QtCore,QtGui    # 匯入Qt5控件, 核心, gui
 from PyQt5.QtWidgets import QTableWidgetItem    # 匯入Qt5表格的控件
 from threading import Thread                # 匯入多執行緒模組
@@ -95,7 +95,7 @@ class discuss(BasicDownloader):                 # 繼承自BasicDownloader
         attachFile = html.find('div',{'class':'attachments'})   # 尋找附加檔案
 
         try:
-            with open(self.path+'/公佈欄內容.txt','w',encoding='utf-8') as file:     # 寫入議題內容
+            with open(self.path+'/討論區內容.txt','w',encoding='utf-8') as file:     # 寫入議題內容
                 file.write(div.text)
 
             if attachFile is not None:                          # 如果有附檔
@@ -105,4 +105,4 @@ class discuss(BasicDownloader):                 # 繼承自BasicDownloader
             else:
                 self.signal_finishDownload.emit()
         except Exception as err:
-            self.signal_errorMsg.emit('下載 '+self.path+'/公佈欄內容.txt'+'時發生錯誤,因此下載失敗!\n'+str(err))
+            self.signal_errorMsg.emit('下載 '+self.path+'/討論區內容.txt'+'時發生錯誤,因此下載失敗!\n'+str(err))
