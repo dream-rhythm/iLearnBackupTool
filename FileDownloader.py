@@ -1,7 +1,7 @@
 from os import makedirs,path                # 匯入系統路徑模組
 from bs4 import BeautifulSoup               # 匯入網頁分析模組
-import img_qr                             # 匯入圖片
-from PyQt5 import QtWidgets,QtCore,QtGui    # 匯入Qt5控件, 核心, gui
+import img_qr                               # 匯入圖片
+from PyQt5 import QtWidgets, QtCore, QtGui  # 匯入Qt5控件, 核心, gui
 from PyQt5.QtWidgets import QTableWidgetItem    # 匯入Qt5表格的控件
 from threading import Thread                # 匯入多執行緒模組
 
@@ -9,7 +9,7 @@ from threading import Thread                # 匯入多執行緒模組
 class BasicDownloader(QtCore.QThread):              # 定義BasicDownloader(需繼承Qt控件才能發出訊號要求更改介面)
     signal_processBar = QtCore.pyqtSignal(float)    # 定義修改進度條之訊號
     signal_downloadNextFile = QtCore.pyqtSignal()   # 定義呼叫下載下一個檔案之訊號(回呼iLearnManager用的)
-    signal_finishDownload =  QtCore.pyqtSignal()    # 定義下載完成顯示"完成"之訊號
+    signal_finishDownload = QtCore.pyqtSignal()     # 定義下載完成顯示"完成"之訊號
     signal_errorMsg = QtCore.pyqtSignal(str)        # 定義下載時發生例外時發出的訊號
 
     def __init__(self):                             # 定義建構子
@@ -35,15 +35,15 @@ class BasicDownloader(QtCore.QThread):              # 定義BasicDownloader(需�
     def FinishDownload(self):                       # 此副函式用來修改進度條(綁定"下載完成"之訊號)
         self.StatusTable.removeCellWidget(self.idx,3)   # 移除進度條之控件
         OkIcon = QtGui.QIcon(":img/FinishDownload.png") # 開啟下載完成之圖案
-        item = QTableWidgetItem(OkIcon , "OK")          # 新增顯示OK的元件
-        self.StatusTable.setItem(self.idx,3,item)       # 將新元件設定到表格內
+        item = QTableWidgetItem(OkIcon, "OK")           # 新增顯示OK的元件
+        self.StatusTable.setItem(self.idx, 3, item)     # 將新元件設定到表格內
         self.signal_downloadNextFile.emit()             # 呼叫iLearnManager進行下一個檔案之下載
 
     def showError(self):                                # 此副函式用來顯示下載失敗之訊息(綁定"有錯誤發生"之訊號)
         self.StatusTable.removeCellWidget(self.idx,3)   # 移除進度條之控件
         ErrorIcon = QtGui.QIcon(":img/DownloadFailed.png")  # 開啟下載失敗之圖案
         item = QTableWidgetItem(ErrorIcon, '下載失敗')       # 新增顯示失敗的元件
-        self.StatusTable.setItem(self.idx, 3, item)           # 將新元件設定到表格內
+        self.StatusTable.setItem(self.idx, 3, item)         # 將新元件設定到表格內
         self.signal_downloadNextFile.emit()                 # 呼叫iLearnManager進行下一個檔案之下載
 
     def download(self):
@@ -76,7 +76,7 @@ class BasicDownloader(QtCore.QThread):              # 定義BasicDownloader(需�
             with open(self.path+'/'+filename,"wb") as file:         # 開啟要寫入之檔案
                 for data in r.iter_content(chunk_size=chunk_size):  # 使用request之iter_content方法迭代串流數據
                     file.write(data)                        # 將數據寫入檔案
-                    offset+=len(data)                       # 更新已下載之大小
+                    offset += len(data)                       # 更新已下載之大小
                     self.signal_processBar.emit(offset/fileSize)    # 使用emit函式發出"更新進度條"之訊號
             self.signal_finishDownload.emit()               # 下載完成後發出"下載完成之訊號"
         except Exception as e:
