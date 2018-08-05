@@ -219,11 +219,10 @@ class myGUI(QMainWindow):
     def ShowResource(self):
         self.CourseTreeList.setEnabled(True)
         self.courseList = self.web.getCourseList()
-        self.statusProcessBar.setMaximum(len(self.courseList))
-        self.statusProcessBar.setValue(0)
-        self.statusProcessBar.setFormat('正在獲取課程資源...(%v/' + str(len(self.courseList)) + ')')
+        #self.statusProcessBar.setMaximum(len(self.courseList))
+        #self.statusProcessBar.setValue(0)
+        #self.statusProcessBar.setFormat('正在獲取課程資源...(%v/' + str(len(self.courseList)) + ')')
 
-        self.fileList = []
         for course in self.courseList:
             courseItem = QTreeWidgetItem(self.CourseTreeListRoot)
             self.CourseTreeListRoot.setExpanded(True)
@@ -231,14 +230,38 @@ class myGUI(QMainWindow):
             courseItem.setText(0,course['title'])
             courseItem.setCheckState(0,QtCore.Qt.Unchecked)
             courseItem.setIcon(0,QIcon(':img/mod.course.jpg'))
+            self.CourseTreeList.itemExpanded.connect(self.ExpandCourse)
+
+            child = QTreeWidgetItem(courseItem)
+            child.setFlags(courseItem.flags()|QtCore.Qt.ItemIsUserCheckable)
+            child.setText(0,'載入中...')
+            child.setCheckState(0, QtCore.Qt.Unchecked)
+        '''
         index = 0
         for course in self.courseList:
             t = Thread(target=self.ShowFileResource,args=(course,self.CourseTreeListRoot.child(index)))
             t.run()
             index += 1
             self.statusProcessBar.setValue(index)
+        '''
+    def ExpandCourse(self,courseItem):
+        if courseItem.child(0).text(0)=='載入中...':
+            i = 0
+            for ele in self.courseList:
+                if ele['title']==courseItem.text(0):
+                    break
+                else:
+                    i += 1
+            self.timer = QtCore.QTimer()  # 计时器
+            self.timer.timeout.connect(partial(self.ShowFileResource,i,courseItem))
+            self.timer.start(300)
 
-    def ShowFileResource(self,course,courseItem):
+    def ShowFileResource(self,i,courseItem):
+        t = Thread(target=self.__ShowFileResource, args=(self.courseList[i], courseItem))
+        t.run()
+        self.timer.stop()
+
+    def __ShowFileResource(self,course,courseItem):
         courseFileList = self.web.getCourseFileList(course)
         for section in courseFileList:
             sectionItem = QTreeWidgetItem(courseItem)
@@ -267,6 +290,7 @@ class myGUI(QMainWindow):
                     recourceItem.setIcon(0,QIcon(":img/mod."+recource['mod']+".svg"))
                 elif recource['mod'] == 'folder':
                     pass
+        courseItem.removeChild(courseItem.child(0))
 
     def showFileList(self):
         backupList = []
