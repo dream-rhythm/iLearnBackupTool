@@ -9,7 +9,7 @@ from functools import partial
 from PyQt5.QtWidgets import QApplication, QMainWindow, QAction, qApp, QMessageBox
 from PyQt5.QtWidgets import QGridLayout, QVBoxLayout, QGroupBox, QHBoxLayout
 from PyQt5.QtWidgets import QDesktopWidget,QWidget,QTableWidgetItem, QTabWidget, QPlainTextEdit
-from PyQt5.QtWidgets import QLabel, QLineEdit, QPushButton, QRadioButton, QCheckBox, QTableWidget
+from PyQt5.QtWidgets import QLabel, QLineEdit, QPushButton, QRadioButton, QCheckBox, QTableWidget,QProgressBar
 from PyQt5.QtGui import QIcon
 from PyQt5 import QtCore
 
@@ -47,6 +47,10 @@ class myGUI(QMainWindow):
         self.moveToCenter()
         self.setWindowTitle('iLearn備份工具')
         self.statusbar.showMessage('備份工具啟動中...')
+        self.statusProcessBar = QProgressBar()
+        self.statusProcessBar.setValue(0)
+        self.statusProcessBar.setFormat("就緒...")
+        self.statusbar.addPermanentWidget(self.statusProcessBar,stretch=0)
 
         exitAct = QAction(QIcon(':img/exit.png'), '關閉工具', self)
         exitAct.setShortcut('Ctrl+Q')
