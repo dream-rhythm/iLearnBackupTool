@@ -212,6 +212,7 @@ class iLearnManager(QWidget):
         downloader.setInformation(self.web, fileInfo, StatusTable, index)
         downloader.signal_downloadNextFile.connect(self.finishDownload)
         downloader.signal_errorMsg.connect(self.showErrorMsg)
+        downloader.signal_printMsg.connect(self.print)
         downloader.download()
 
     def finishDownload(self):

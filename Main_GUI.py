@@ -406,7 +406,6 @@ class myGUI(QMainWindow):
                             modItemName = modItem.text(0)
                             modData = [sectionData['mods'][i] for i in range(len(sectionData['mods'])) if sectionData['mods'][i]['name']==modItemName][0]
                             if modItem.checkState(0)!=QtCore.Qt.Unchecked:
-                                self.print(str(modItem.checkState(0))+'='+(modItem.text(0))+str(modData))
                                 if modData['mod']=='forum':
                                     for topicItem in [modItem.child(i) for i in range(modItem.childCount())]:
                                         if topicItem.checkState(0)==QtCore.Qt.Checked:
@@ -423,6 +422,7 @@ class myGUI(QMainWindow):
                                             resource = [modData['data'][i] for i in range(len(modData['data'])) if  modData['data'][i]['name'] == fileName][0]
                                             self.signal_appenDownloadList.emit(resource)
         self.nowDownload = 0
+        self.statusProcessBar.setFormat("正在下載...(%v/"+"%d)"%len(self.fileList))
         self.signal_startDownload.emit()
 
     def appendItemToDownloadList(self,Item):
@@ -443,13 +443,16 @@ class myGUI(QMainWindow):
             self.web.DownloadFile(self.StatusTable,self.nowDownload,self.fileList[self.nowDownload])
             self.nowDownload += 1
             self.btn_StartBackup.setText('正在下載...('+str(self.nowDownload)+'/'+str(len(self.fileList))+')')
+            self.signal_processbar_value(self.nowDownload)
             self.print('nowDownload='+str(self.nowDownload))
 
     def StartBackup(self):
+        self.fileList=[]
+        self.nowDownload=0
+        self.StatusTable.setRowCount(0)
         self.statusProcessBar.setFormat("正在獲取檔案清單(%v" +"/%d)" % self.CourseTreeListRoot.childCount())
         self.statusProcessBar.setMaximum(self.CourseTreeListRoot.childCount())
-        t=Thread(target=self.showFileList)
-        t.run()
+        self.showFileList()
 
     def showInformation(self):
         QMessageBox.about(self, '關於', 'iLearn備份工具\n工具版本：'+str(self.version))
