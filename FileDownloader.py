@@ -106,3 +106,106 @@ class discuss(BasicDownloader):                 # 繼承自BasicDownloader
                 self.signal_finishDownload.emit()
         except Exception as err:
             self.signal_errorMsg.emit('下載 '+self.path+'/討論區內容.txt'+'時發生錯誤,因此下載失敗!\n'+str(err))
+
+class folderResource(BasicDownloader):
+    def __init__(self):                         # 初始化
+        super().__init__()                      # 初始化父類別
+
+    def HtmlPaser(self):                                    # 重載HtmlPaser
+        url = self.Fileinfo['mod_id']                        # 生成網址
+        try:
+            self.downloadWithRealUrl(url,self.Fileinfo['name'])          # 下載
+        except Exception as err:
+            self.signal_errorMsg.emit('下載 '+self.path+'/'+self.Fileinfo['name']+'時發生錯誤,因此下載失敗!\n'+str(err))
+
+class resource(BasicDownloader):
+    def __init__(self):                         # 初始化
+        super().__init__()                      # 初始化父類別
+
+    def HtmlPaser(self):                                    # 重載HtmlPaser
+        url = 'https://ilearn2.fcu.edu.tw/mod/resource/view.php?id=' + self.Fileinfo['mod_id']  # 生成網址
+        r = self.session.get(url)  # 獲取資料
+        html = BeautifulSoup(r.text, 'lxml')  # 使用BeautifulSoup進行分析
+        attachFile = html.find('div', {'class': 'resourceworkaround'})  # 尋找議題內容
+        filename = attachFile.a.text  # 尋找附加檔案
+        url = attachFile.a.get('href')
+        try:
+            self.downloadWithRealUrl(url,filename)          # 下載
+        except Exception as err:
+            self.signal_errorMsg.emit('下載 '+self.path+'/'+self.Fileinfo['name']+'時發生錯誤,因此下載失敗!\n'+str(err))
+
+class url(BasicDownloader):
+    def __init__(self):                         # 初始化
+        super().__init__()                      # 初始化父類別
+
+    def HtmlPaser(self):                                    # 重載HtmlPaser
+        url = 'https://ilearn2.fcu.edu.tw/mod/url/view.php?id=' + self.Fileinfo['mod_id']  # 生成網址
+        r = self.session.get(url)  # 獲取資料
+        html = BeautifulSoup(r.text, 'lxml')  # 使用BeautifulSoup進行分析
+        realUrl = html.find('div', {'class': 'urlworkaround'}).get('href')  # 尋找議題內容
+        try:
+            with open(self.Fileinfo['path']+'/'+self.Fileinfo['name']+'.url','w') as f:
+                f.write('[{000214A0-0000-0000-C000-000000000046}]\n')
+                f.write('Prop3=19,11\n')
+                f.write('[InternetShortcut]\n')
+                f.write('IDList=\n')
+                f.write('URL=%s\n'%realUrl)
+            self.signal_finishDownload.emit()
+        except Exception as err:
+            self.signal_errorMsg.emit('下載 '+self.path+'/'+self.Fileinfo['name']+'時發生錯誤,因此下載失敗!\n'+str(err))
+
+class assign(BasicDownloader):
+    def __init__(self):                         # 初始化
+        super().__init__()                      # 初始化父類別
+
+    def HtmlPaser(self):                                    # 重載HtmlPaser
+        url = 'https://ilearn2.fcu.edu.tw/mod/assign/view.php?id=' + self.Fileinfo['mod_id']  # 生成網址
+        r = self.session.get(url)  # 獲取資料
+        html = BeautifulSoup(r.text, 'lxml')                     # 使用BeautifulSoup進行分析
+        TAGradingLink = html.find('div', {'class': 'gradingsummary'})          # 尋找助教權限
+        if TAGradingLink !=None :
+            realUrl = url +'&action=downloadall'
+            filename = '所有繳交的作業.zip'
+        else:
+            HasSubmit = html.find('td', {'class': 'submissionstatussubmitted cell c1 lastcol'})
+            if HasSubmit!=None:
+                box  = html.find('div',{'class':'box boxaligncenter submissionsummarytable'})
+                file = box.find('a')
+                realUrl = file.get('href')
+                filename = file.text
+        try:
+            self.downloadWithRealUrl(realUrl,filename)          # 下載
+        except Exception as err:
+            self.signal_errorMsg.emit('下載 '+self.path+'/'+filename+'時發生錯誤,因此下載失敗!\n'+str(err))
+
+class page(BasicDownloader):
+    def __init__(self):                         # 初始化
+        super().__init__()                      # 初始化父類別
+
+    def HtmlPaser(self):                                    # 重載HtmlPaser
+        try:
+            url = 'https://ilearn2.fcu.edu.tw/mod/page/view.php?id=' + self.Fileinfo['mod_id']  # 生成網址
+            r = self.session.get(url)  # 獲取資料
+            html = BeautifulSoup(r.text, 'lxml')  # 使用BeautifulSoup進行分析
+            page = html.find('div', {'role': 'main'})  # 尋找議題內容
+            with open(self.Fileinfo['path']+'/'+self.Fileinfo['name']+'.txt',mode='w') as f:
+                f.write(page.text)
+            self.signal_finishDownload.emit()
+        except Exception as err:
+            self.signal_errorMsg.emit('下載 '+self.path+'/'+self.Fileinfo['name']+'時發生錯誤,因此下載失敗!\n'+str(err))
+
+class videos(BasicDownloader):
+    def __init__(self):                         # 初始化
+        super().__init__()                      # 初始化父類別
+
+    def HtmlPaser(self):                                    # 重載HtmlPaser
+        try:
+            url = 'https://ilearn2.fcu.edu.tw/mod/videos/view.php?id=' + self.Fileinfo['mod_id']  # 生成網址
+            r = self.session.get(url)  # 獲取資料
+            html = BeautifulSoup(r.text, 'lxml')  # 使用BeautifulSoup進行分析
+            video = html.find('video').source.get('src')  # 尋找議題內容
+            videoType = video.split('/')[-1].split('.')[-1]
+            filename = self.Fileinfo['name']+'.'+videoType
+            self.downloadWithRealUrl(video,filename)
+        except Exception as err:
+            self.signal_errorMsg.emit('下載 '+self.path+'/'+self.Fileinfo['name']+'時發生錯誤,因此下載失敗!\n'+str(err))

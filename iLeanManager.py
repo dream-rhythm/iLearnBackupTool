@@ -185,8 +185,8 @@ class iLearnManager(QWidget):
             try:
                url = file.a.get('href')
                filename = file.find('span',{'class':'fp-filename'}).text
-               mod='folder'
-               path = info['path']+'/'+info['name']+'/'+self.removeIllageWord(filename)
+               mod='folder/resource'
+               path = info['path']+'/'+info['name']
                FileList.append({'path': path, 'mod': mod, 'name': filename, 'mod_id': url})
             except:
                 pass
@@ -195,6 +195,18 @@ class iLearnManager(QWidget):
     def DownloadFile(self, StatusTable, index, fileInfo):
         if fileInfo['mod'] == 'forum/discuss':
             downloader = FileDownloader.discuss()
+        elif fileInfo['mod'] == 'folder/resource':
+            downloader = FileDownloader.folderResource()
+        elif fileInfo['mod'] =='resource':
+            downloader = FileDownloader.resource()
+        elif fileInfo['mod']=='url':
+            downloader = FileDownloader.url()
+        elif fileInfo['mod']=='assign':
+            downloader = FileDownloader.assign()
+        elif fileInfo['mod']=='page':
+            downloader = FileDownloader.page()
+        elif fileInfo['mod']=='videos':
+            downloader = FileDownloader.videos()
         else:
             downloader = FileDownloader.BasicDownloader()
         downloader.setInformation(self.web, fileInfo, StatusTable, index)

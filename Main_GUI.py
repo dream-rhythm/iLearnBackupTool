@@ -24,6 +24,7 @@ class myGUI(QMainWindow):
     signal_showUserOptionWindow = QtCore.pyqtSignal()
     signal_showDevOptionWindow = QtCore.pyqtSignal()
     signal_close = QtCore.pyqtSignal()
+    signal_appenDownloadList = QtCore.pyqtSignal(dict)
     signal_processbar_value = QtCore.pyqtSignal(int)
 
     def __init__(self):
@@ -39,9 +40,11 @@ class myGUI(QMainWindow):
         self.web = iLearnManager(self.host)
         self.init_iLearn()
         self.FileTree={}
+        self.fileList=[]
         self.nowLoad = 0
         self.signal_startDownload.connect(self.startDownload)
         self.signal_loginSuccess.connect(self.ShowResource)
+        self.signal_appenDownloadList.connect(self.appendItemToDownloadList)
         self.signal_processbar_value.connect(self.setProcessBarValue)
         if self.config['dev'].getboolean('autologin')==True:
             self.btn_login.click()
@@ -256,7 +259,6 @@ class myGUI(QMainWindow):
             self.print(UserName + '登入失敗')
         self.nowLoad = 0
 
-
     def ShowResource(self):
         self.CourseTreeList.setEnabled(True)
         self.courseList = self.web.getCourseList()
@@ -268,7 +270,6 @@ class myGUI(QMainWindow):
             courseItem.setText(0,course['title'])
             courseItem.setCheckState(0,QtCore.Qt.Unchecked)
             courseItem.setIcon(0,QIcon(':img/mod.course.jpg'))
-
 
             child = QTreeWidgetItem(courseItem)
             child.setFlags(courseItem.flags()|QtCore.Qt.ItemIsUserCheckable)
@@ -291,7 +292,7 @@ class myGUI(QMainWindow):
     def startBackgroundLoad(self):
         if self.nowLoad<len(self.courseList):
             self.statusProcessBar.setMaximum(len(self.courseList))
-            self.statusProcessBar.setFormat('正在背景載入課程資源(%v/'+'%d)'%(len(self.courseList)))
+            self.statusProcessBar.setFormat('正在載入課程資源(%v/'+'%d)'%(len(self.courseList)))
 
             reqs = threadpool.makeRequests(self.loadFileTreeBackground, range(len(self.courseList)))
             for req in reqs:
@@ -299,9 +300,15 @@ class myGUI(QMainWindow):
 
     def setProcessBarValue(self,value):
         if value ==self.statusProcessBar.maximum():
+            self.btn_StartBackup.setEnabled(True)
             self.statusProcessBar.setFormat('就緒...')
             self.statusProcessBar.setMaximum(100)
             self.statusProcessBar.setValue(0)
+            if self.nowLoad==self.CourseTreeListRoot.childCount():
+                for i,courseItem in [(i,self.CourseTreeListRoot.child(i)) for i in range(self.CourseTreeListRoot.childCount())]:
+                    if courseItem.child(0).text(0)=="載入中...":
+                        self.ShowFileResource(i,courseItem)
+                self.nowLoad=0
         else:
             self.statusProcessBar.setValue(value)
 
@@ -317,7 +324,10 @@ class myGUI(QMainWindow):
 
     def ShowFileResource(self,i,courseItem):
         course = self.courseList[i]
-        self.timer.stop()
+        try:
+            self.timer.stop()
+        except:
+            pass
         tStart = time.time()
         if course['title'] not in self.FileTree:
             courseFileList = self.web.getCourseFileList(course,useRealFileName=self.config['User'].getboolean('userealfilename')
@@ -331,45 +341,45 @@ class myGUI(QMainWindow):
         totalFiles = 0
         if len(courseFileList)==0:
             sectionItem = QTreeWidgetItem(courseItem)
-            sectionItem.setFlags(sectionItem.flags() | QtCore.Qt.ItemIsUserCheckable)
+            sectionItem.setFlags(sectionItem.flags() |QtCore.Qt.ItemIsTristate|QtCore.Qt.ItemIsUserCheckable)
             sectionItem.setText(0, '沒有可下載的資源')
             sectionItem.setCheckState(0, checkStatus)
         for section in courseFileList:
             sectionItem = QTreeWidgetItem(courseItem)
-            sectionItem.setFlags(sectionItem.flags() | QtCore.Qt.ItemIsUserCheckable)
+            sectionItem.setFlags(sectionItem.flags() |QtCore.Qt.ItemIsTristate|QtCore.Qt.ItemIsUserCheckable)
             sectionItem.setText(0, section['section'])
             sectionItem.setCheckState(0, checkStatus)
             sectionItem.setIcon(0,QIcon(":img/mod.folder.svg"))
             for recource in section['mods']:
                 if recource['mod'] == 'forum':
                     forumItem = QTreeWidgetItem(sectionItem)
-                    forumItem.setFlags(forumItem.flags() | QtCore.Qt.ItemIsUserCheckable)
+                    forumItem.setFlags(forumItem.flags() |QtCore.Qt.ItemIsTristate|QtCore.Qt.ItemIsUserCheckable)
                     forumItem.setText(0, recource['name'])
                     forumItem.setCheckState(0, checkStatus)
                     forumItem.setIcon(0,QIcon(":img/mod.discuss.svg"))
                     for topic in recource['data']:
                         topicItem = QTreeWidgetItem(forumItem)
-                        topicItem.setFlags(topicItem.flags() | QtCore.Qt.ItemIsUserCheckable)
+                        topicItem.setFlags(topicItem.flags() |QtCore.Qt.ItemIsTristate|QtCore.Qt.ItemIsUserCheckable)
                         topicItem.setText(0, topic['name'])
                         topicItem.setCheckState(0,checkStatus)
                         topicItem.setIcon(0,QIcon(":img/mod.discuss.svg"))
                         totalFiles += 1
                 elif recource['mod'] in ['url', 'resource', 'assign', 'page', 'videos']:
                     recourceItem = QTreeWidgetItem(sectionItem)
-                    recourceItem.setFlags(recourceItem.flags() | QtCore.Qt.ItemIsUserCheckable)
+                    recourceItem.setFlags(recourceItem.flags() |QtCore.Qt.ItemIsTristate|QtCore.Qt.ItemIsUserCheckable)
                     recourceItem.setText(0, recource['name'])
                     recourceItem.setCheckState(0, checkStatus)
                     recourceItem.setIcon(0,QIcon(":img/mod."+recource['mod']+".svg"))
                     totalFiles += 1
                 elif recource['mod'] == 'folder':
                     folderItem = QTreeWidgetItem(sectionItem)
-                    folderItem.setFlags(folderItem.flags() | QtCore.Qt.ItemIsUserCheckable)
+                    folderItem.setFlags(folderItem.flags() |QtCore.Qt.ItemIsTristate|QtCore.Qt.ItemIsUserCheckable)
                     folderItem.setText(0, recource['name'])
                     folderItem.setCheckState(0, checkStatus)
                     folderItem.setIcon(0, QIcon(":img/mod.folder.svg"))
                     for file in recource['data']:
                         fileItem = QTreeWidgetItem(folderItem)
-                        fileItem.setFlags(fileItem.flags() | QtCore.Qt.ItemIsUserCheckable)
+                        fileItem.setFlags(fileItem.flags() |QtCore.Qt.ItemIsTristate|QtCore.Qt.ItemIsUserCheckable)
                         fileItem.setText(0, file['name'])
                         fileItem.setCheckState(0, checkStatus)
                         fileItem.setIcon(0, QIcon(":img/mod.resource.svg"))
@@ -380,32 +390,53 @@ class myGUI(QMainWindow):
 
     def showFileList(self):
         backupList = []
-        items = [self.CourseListBox.itemAt(i).widget() for i in range(self.CourseListBox.count())]
-        for idx in range(len(items)):
-            checkbox = items[idx]
-            if isinstance(checkbox, QCheckBox):
-                for ele in self.courseList:
-                    if ele['title'] == checkbox.text():
-                        course = ele
-                        break
-                if checkbox.isChecked():
-                    backupList.append(course)
-        self.fileList = []
-        i = 1
-        for course in backupList:
-            coursefile = self.web.getCourseFileList(course)
-            self.btn_StartBackup.setText('正在獲取檔案清單中,請稍後...('+str(i)+'/'+str(len(backupList))+')')
-            i+=1
-            self.fileList.extend(coursefile)
-            for ele in coursefile:
-                row_count = self.StatusTable.rowCount()
-                self.StatusTable.insertRow(row_count)
-                self.StatusTable.setItem(row_count, 0, QTableWidgetItem(ele['name']))
-                self.StatusTable.setItem(row_count, 1, QTableWidgetItem(ele['path']))
-                self.StatusTable.setItem(row_count, 2, QTableWidgetItem(ele['mod']))
-                self.StatusTable.setItem(row_count, 3, QTableWidgetItem('等待中...'))
+        courseIndex = 0
+        for courseItem in [self.CourseTreeListRoot.child(i) for i in range(self.CourseTreeListRoot.childCount())]:
+            courseIndex += 1
+            self.signal_processbar_value.emit(courseIndex)
+            courseData = self.FileTree[courseItem.text(0)]
+            if courseItem.checkState(0)!=QtCore.Qt.Unchecked:
+                for sectionItem in [courseItem.child(i) for i in range(courseItem.childCount())]:
+                    sectionItemName = sectionItem.text(0)
+                    if sectionItemName=='沒有可下載的資源':
+                        continue
+                    sectionData = [courseData[i] for i in range(len(courseData)) if courseData[i]['section']==sectionItemName][0]
+                    if sectionItem.checkState(0)!=QtCore.Qt.Unchecked:
+                        for modItem in [sectionItem.child(i)for i in range(sectionItem.childCount())]:
+                            modItemName = modItem.text(0)
+                            modData = [sectionData['mods'][i] for i in range(len(sectionData['mods'])) if sectionData['mods'][i]['name']==modItemName][0]
+                            if modItem.checkState(0)!=QtCore.Qt.Unchecked:
+                                self.print(str(modItem.checkState(0))+'='+(modItem.text(0))+str(modData))
+                                if modData['mod']=='forum':
+                                    for topicItem in [modItem.child(i) for i in range(modItem.childCount())]:
+                                        if topicItem.checkState(0)==QtCore.Qt.Checked:
+                                            topicName = topicItem.text(0)
+                                            resource = [modData['data'][i]for i in range(len(modData['data'])) if modData['data'][i]['name']==topicName][0]
+                                            self.signal_appenDownloadList.emit(resource)
+                                elif  modData['mod']in ['resource','url', 'assign', 'page', 'videos']:
+                                    if modItem.checkState(0)==QtCore.Qt.Checked:
+                                        self.signal_appenDownloadList.emit(modData)
+                                elif modData['mod']=='folder':
+                                    for fileItem in [modItem.child(i)for i in range(modItem.childCount())]:
+                                        if fileItem.checkState(0)==QtCore.Qt.Checked:
+                                            fileName = fileItem.text(0)
+                                            resource = [modData['data'][i] for i in range(len(modData['data'])) if  modData['data'][i]['name'] == fileName][0]
+                                            self.signal_appenDownloadList.emit(resource)
         self.nowDownload = 0
         self.signal_startDownload.emit()
+
+    def appendItemToDownloadList(self,Item):
+        self.fileList.append(Item)
+        self.btn_StartBackup.setEnabled(False)
+        mod = Item['mod']
+        if  '/' in mod:
+            mod = mod.split('/')[1]
+        row_count = self.StatusTable.rowCount()
+        self.StatusTable.insertRow(row_count)
+        self.StatusTable.setItem(row_count, 0, QTableWidgetItem(Item['name']))
+        self.StatusTable.setItem(row_count, 1, QTableWidgetItem(Item['path']))
+        self.StatusTable.setItem(row_count, 2, QTableWidgetItem(QIcon(':img/mod.%s.svg'%mod),Item['mod']))
+        self.StatusTable.setItem(row_count, 3, QTableWidgetItem('等待中...'))
 
     def startDownload(self):
         if self.nowDownload < len(self.fileList):
@@ -415,19 +446,10 @@ class myGUI(QMainWindow):
             self.print('nowDownload='+str(self.nowDownload))
 
     def StartBackup(self):
-        if self.NumOfSelect == 0:
-            self.btn_StartBackup.setText('請先選擇課程再按開始備份!')
-        else:
-            self.btn_selectAll.setEnabled(False)
-            self.btn_selectNone.setEnabled(False)
-            self.btn_StartBackup.setText('正在獲取檔案清單中,請稍後...')
-            self.btn_StartBackup.setEnabled(False)
-            items = [self.CourseListBox.itemAt(i).widget() for i in range(self.CourseListBox.count())]
-            for idx in range(len(items)):
-                checkbox = items[idx]
-                if isinstance(checkbox, QCheckBox):
-                    checkbox.setEnabled(False)
-            _thread.start_new_thread(self.showFileList, ())
+        self.statusProcessBar.setFormat("正在獲取檔案清單(%v" +"/%d)" % self.CourseTreeListRoot.childCount())
+        self.statusProcessBar.setMaximum(self.CourseTreeListRoot.childCount())
+        t=Thread(target=self.showFileList)
+        t.run()
 
     def showInformation(self):
         QMessageBox.about(self, '關於', 'iLearn備份工具\n工具版本：'+str(self.version))
