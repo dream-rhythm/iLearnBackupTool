@@ -8,8 +8,8 @@ with open('img.qrc', mode='w') as f:
         for file in files:
             filePath = path+'/'+file
             s = '<file alias="'
-            s+=filePath
-            s+='">'+filePath+'</file>\n'
+            s += filePath
+            s += '">'+filePath+'</file>\n'
             f.write(s)
     f.write('</qresource>\n')
     f.write('</RCC>\n')

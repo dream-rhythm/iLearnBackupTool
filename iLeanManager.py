@@ -15,7 +15,7 @@ class iLearnManager(QWidget):
         self.web = requests.Session()
         self.NID = ""
         self.Pass = ""
-        self.courseList=[]
+        self.courseList = []
         self.host = host
 
     def print(self,msg):
