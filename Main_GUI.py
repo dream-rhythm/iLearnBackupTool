@@ -362,7 +362,18 @@ class myGUI(QMainWindow):
                     recourceItem.setIcon(0,QIcon(":img/mod."+recource['mod']+".svg"))
                     totalFiles += 1
                 elif recource['mod'] == 'folder':
-                    pass
+                    folderItem = QTreeWidgetItem(sectionItem)
+                    folderItem.setFlags(folderItem.flags() | QtCore.Qt.ItemIsUserCheckable)
+                    folderItem.setText(0, recource['name'])
+                    folderItem.setCheckState(0, checkStatus)
+                    folderItem.setIcon(0, QIcon(":img/mod.folder.svg"))
+                    for file in recource['data']:
+                        fileItem = QTreeWidgetItem(folderItem)
+                        fileItem.setFlags(fileItem.flags() | QtCore.Qt.ItemIsUserCheckable)
+                        fileItem.setText(0, file['name'])
+                        fileItem.setCheckState(0, checkStatus)
+                        fileItem.setIcon(0, QIcon(":img/mod.resource.svg"))
+                        totalFiles += 1
         courseItem.removeChild(courseItem.child(0))
         tStop = time.time()
         self.print('載入課程 %s 花費%.3f秒, 共%d項資源'%(courseItem.text(0),tStop-tStart,totalFiles))

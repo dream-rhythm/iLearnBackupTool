@@ -124,8 +124,10 @@ class iLearnManager(QWidget):
                 elif recource['mod'] in ['url', 'assign', 'page', 'videos']:
                     recourceList.append(recource)
                 elif recource['mod'] == 'folder':
-                    recource['data']=self.getFileList_folder(recource)
-                    recourceList.append(recource)
+                    data=self.getFileList_folder(recource,showTime)
+                    if len(data)!=0:
+                        recource['data'] = data
+                        recourceList.append(recource)
                 else:
                     self.print('發現不支援的課程模組 '+recource['mod']+' mod: '+recource['name'])
             if len(recourceList)!=0:
@@ -167,8 +169,28 @@ class iLearnManager(QWidget):
         info['name'] = filename
         return info
 
-    def getFileList_folder(self, info):
-        return []
+    def getFileList_folder(self, info,showTime):
+        tStart = time.time()
+        r = self.web.get('https://ilearn2.fcu.edu.tw/mod/folder/view.php?id=' + info['mod_id'])
+        tStop = time.time()
+        if showTime:
+            self.print('開啟資料夾 %s頁面花費 %.3f 秒' % (info['name'], tStop - tStart))
+        soup = BeautifulSoup(r.text, 'html.parser')
+        FileList = []
+        try:
+            filetable = soup.find_all('span',{'class':'fp-filename-icon'})
+        except:
+            filetable = []
+        for file in filetable:
+            try:
+               url = file.a.get('href')
+               filename = file.find('span',{'class':'fp-filename'}).text
+               mod='folder'
+               path = info['path']+'/'+info['name']+'/'+self.removeIllageWord(filename)
+               FileList.append({'path': path, 'mod': mod, 'name': filename, 'mod_id': url})
+            except:
+                pass
+        return FileList
 
     def DownloadFile(self, StatusTable, index, fileInfo):
         if fileInfo['mod'] == 'forum/discuss':
