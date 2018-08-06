@@ -6,22 +6,31 @@ import _thread
 from threading import Thread
 from iLeanManager import iLearnManager
 from functools import partial
+from os.path import exists
 from PyQt5.QtWidgets import QApplication, QMainWindow, QAction, qApp, QMessageBox
 from PyQt5.QtWidgets import QGridLayout, QVBoxLayout, QGroupBox, QHBoxLayout, QTreeWidget, QTreeWidgetItem
 from PyQt5.QtWidgets import QDesktopWidget,QWidget,QTableWidgetItem, QTabWidget, QPlainTextEdit, QAbstractItemView
 from PyQt5.QtWidgets import QLabel, QLineEdit, QPushButton, QRadioButton, QCheckBox, QTableWidget,QProgressBar
 from PyQt5.QtGui import QIcon
 from PyQt5 import QtCore
-from multiprocessing.pool import ThreadPool
+from configparser import ConfigParser
+import threadpool
 import img_qr
 
 
 class myGUI(QMainWindow):
     signal_startDownload = QtCore.pyqtSignal()
     signal_loginSuccess = QtCore.pyqtSignal()
+    signal_showUserOptionWindow = QtCore.pyqtSignal()
+    signal_showDevOptionWindow = QtCore.pyqtSignal()
+    signal_close = QtCore.pyqtSignal()
+    signal_processbar_value = QtCore.pyqtSignal(int)
 
     def __init__(self):
         super().__init__()
+        self.config = ConfigParser()
+        self.pool = threadpool.ThreadPool(4)
+        self.readSetting()
         self.version = 0.1
         self.checkUpdate()
         self.host='https://ilearn2.fcu.edu.tw'
@@ -29,13 +38,23 @@ class myGUI(QMainWindow):
         self.initUI()
         self.web = iLearnManager(self.host)
         self.init_iLearn()
+        self.FileTree={}
+        self.nowLoad = 0
         self.signal_startDownload.connect(self.startDownload)
         self.signal_loginSuccess.connect(self.ShowResource)
+        self.signal_processbar_value.connect(self.setProcessBarValue)
+        if self.config['dev'].getboolean('autologin')==True:
+            self.btn_login.click()
+
+    def closeEvent(self, event):
+        self.signal_close.emit()
+        self.close()
 
     def init_iLearn(self):
         self.web.signal_finishDownload.connect(self.startDownload)
         self.web.signal_Log.connect(self.print)
-        Thread(target=self.TestiLearnConnection())
+        t = Thread(target=self.TestiLearnConnection)
+        t.run()
 
     def checkUpdate(self):
         with open('version.ini', mode='w') as f:
@@ -58,6 +77,7 @@ class myGUI(QMainWindow):
         self.moveToCenter()
         self.setWindowTitle('iLearn備份工具')
         self.statusbar.showMessage('備份工具啟動中...')
+        self.createMenu()
         self.statusProcessBar = QProgressBar()
         self.statusProcessBar.setValue(0)
         self.statusProcessBar.setFormat("就緒...")
@@ -112,8 +132,10 @@ class myGUI(QMainWindow):
         form = QGridLayout()
         label_NID = QLabel("帳號:")
         self.input_NID = QLineEdit()
+        self.input_NID.setText(self.config['dev']['nid'])
         label_Pass = QLabel("密碼:")
         self.input_Pass = QLineEdit()
+        self.input_Pass.setText(self.config['dev']['pass'])
         self.input_Pass.setEchoMode(QLineEdit.Password)
         form.addWidget(label_NID, 0, 0)
         form.addWidget(self.input_NID, 0, 1, 1, 2)
@@ -167,7 +189,7 @@ class myGUI(QMainWindow):
         return groupBox
 
     def createCourseGroup(self):
-        groupBox = QGroupBox("Step 2:選擇要備份的課程")
+        groupBox = QGroupBox("Step 2:選擇要備份的課程資源")
 
         self.CourseListBox = QVBoxLayout()
         self.CourseListBox.addStretch(1)
@@ -175,6 +197,7 @@ class myGUI(QMainWindow):
         self.CourseTreeList = QTreeWidget()
         self.CourseTreeList.setHeaderHidden(True)
         self.CourseTreeList.setEnabled(False)
+        self.CourseTreeList.itemExpanded.connect(self.ExpandCourse)
         self.CourseTreeListRoot = QTreeWidgetItem(self.CourseTreeList)
         self.CourseTreeListRoot.setText(0,"所有課程")
         self.CourseTreeListRoot.setFlags(self.CourseTreeListRoot.flags()|QtCore.Qt.ItemIsTristate|QtCore.Qt.ItemIsUserCheckable)
@@ -187,15 +210,31 @@ class myGUI(QMainWindow):
 
         return groupBox
 
-    def selectAllAction(self,Check):
-        items = [self.CourseListBox.itemAt(i).widget() for i in range(self.CourseListBox.count())]
-        for idx in range(len(items)):
-            checkbox = items[idx]
-            if isinstance(checkbox, QCheckBox):
-                checkbox.setChecked(Check)
+    def createMenu(self):
+        menubar = self.menuBar()
+
+        fileMenu = menubar.addMenu('檔案')
+        closeAct = QAction('關閉程式', self)
+        closeAct.triggered.connect(qApp.quit)
+        fileMenu.addAction(closeAct)
+
+        optMenu = menubar.addMenu('選項')
+        DevOptAct = QAction('開發人員選項',self)
+        DevOptAct.triggered.connect(self.showDevOption)
+        UserOptionAction = QAction('偏好設定',self)
+        UserOptionAction.triggered.connect(self.showUserOption)
+        optMenu.addAction(UserOptionAction)
+        optMenu.addAction(DevOptAct)
+
+    def showUserOption(self):
+        self.signal_showUserOptionWindow.emit()
+
+    def showDevOption(self):
+        self.signal_showDevOptionWindow.emit()
 
     def Login(self):
-        Thread(target = self.__Login())
+        t = Thread(target = self.__Login)
+        t.run()
 
     def __Login(self):
         self.web.setUser(self.input_NID.text(),self.input_Pass.text())
@@ -215,13 +254,12 @@ class myGUI(QMainWindow):
             self.statusbar.showMessage('登入失敗')
             self.label_iLearn.setText('登入失敗')
             self.print(UserName + '登入失敗')
+        self.nowLoad = 0
+
 
     def ShowResource(self):
         self.CourseTreeList.setEnabled(True)
         self.courseList = self.web.getCourseList()
-        #self.statusProcessBar.setMaximum(len(self.courseList))
-        #self.statusProcessBar.setValue(0)
-        #self.statusProcessBar.setFormat('正在獲取課程資源...(%v/' + str(len(self.courseList)) + ')')
 
         for course in self.courseList:
             courseItem = QTreeWidgetItem(self.CourseTreeListRoot)
@@ -230,67 +268,104 @@ class myGUI(QMainWindow):
             courseItem.setText(0,course['title'])
             courseItem.setCheckState(0,QtCore.Qt.Unchecked)
             courseItem.setIcon(0,QIcon(':img/mod.course.jpg'))
-            self.CourseTreeList.itemExpanded.connect(self.ExpandCourse)
+
 
             child = QTreeWidgetItem(courseItem)
             child.setFlags(courseItem.flags()|QtCore.Qt.ItemIsUserCheckable)
             child.setText(0,'載入中...')
             child.setCheckState(0, QtCore.Qt.Unchecked)
-        '''
-        index = 0
-        for course in self.courseList:
-            t = Thread(target=self.ShowFileResource,args=(course,self.CourseTreeListRoot.child(index)))
-            t.run()
-            index += 1
-            self.statusProcessBar.setValue(index)
-        '''
+        self.startBackgroundLoad()
+
     def ExpandCourse(self,courseItem):
         if courseItem.child(0).text(0)=='載入中...':
             i = 0
             for ele in self.courseList:
-                if ele['title']==courseItem.text(0):
+                if ele['title'] == courseItem.text(0):
                     break
                 else:
                     i += 1
             self.timer = QtCore.QTimer()  # 计时器
-            self.timer.timeout.connect(partial(self.ShowFileResource,i,courseItem))
-            self.timer.start(300)
+            self.timer.timeout.connect(partial(self.ShowFileResource, i, courseItem))
+            self.timer.start(10)
+
+    def startBackgroundLoad(self):
+        if self.nowLoad<len(self.courseList):
+            self.statusProcessBar.setMaximum(len(self.courseList))
+            self.statusProcessBar.setFormat('正在背景載入課程資源(%v/'+'%d)'%(len(self.courseList)))
+
+            reqs = threadpool.makeRequests(self.loadFileTreeBackground, range(len(self.courseList)))
+            for req in reqs:
+                self.pool.putRequest(req)
+
+    def setProcessBarValue(self,value):
+        if value ==self.statusProcessBar.maximum():
+            self.statusProcessBar.setFormat('就緒...')
+            self.statusProcessBar.setMaximum(100)
+            self.statusProcessBar.setValue(0)
+        else:
+            self.statusProcessBar.setValue(value)
+
+    def loadFileTreeBackground(self,index):
+        if self.courseList[index]['title'] not in self.FileTree:
+            FileList = self.web.getCourseFileList(self.courseList[index]
+                                                  ,useRealFileName=self.config['User'].getboolean('userealfilename')
+                                                  ,showTime=self.config['dev'].getboolean('showloadtime'))
+            if self.courseList[index]['title'] not in self.FileTree:
+                self.FileTree[self.courseList[index]['title']] = FileList
+            self.nowLoad+=1
+            self.signal_processbar_value.emit(self.nowLoad)
 
     def ShowFileResource(self,i,courseItem):
-        t = Thread(target=self.__ShowFileResource, args=(self.courseList[i], courseItem))
-        t.run()
+        course = self.courseList[i]
         self.timer.stop()
-
-    def __ShowFileResource(self,course,courseItem):
-        courseFileList = self.web.getCourseFileList(course)
+        tStart = time.time()
+        if course['title'] not in self.FileTree:
+            courseFileList = self.web.getCourseFileList(course,useRealFileName=self.config['User'].getboolean('userealfilename')
+                                                  ,showTime=self.config['dev'].getboolean('showloadtime'))
+            if course['title'] not in self.FileTree:
+                self.FileTree[course['title']] = courseFileList
+                self.nowLoad += 1
+        else:
+            courseFileList = self.FileTree[course['title']]
+        checkStatus = courseItem.checkState(0)
+        totalFiles = 0
+        if len(courseFileList)==0:
+            sectionItem = QTreeWidgetItem(courseItem)
+            sectionItem.setFlags(sectionItem.flags() | QtCore.Qt.ItemIsUserCheckable)
+            sectionItem.setText(0, '沒有可下載的資源')
+            sectionItem.setCheckState(0, checkStatus)
         for section in courseFileList:
             sectionItem = QTreeWidgetItem(courseItem)
             sectionItem.setFlags(sectionItem.flags() | QtCore.Qt.ItemIsUserCheckable)
             sectionItem.setText(0, section['section'])
-            sectionItem.setCheckState(0, QtCore.Qt.Unchecked)
+            sectionItem.setCheckState(0, checkStatus)
             sectionItem.setIcon(0,QIcon(":img/mod.folder.svg"))
             for recource in section['mods']:
                 if recource['mod'] == 'forum':
                     forumItem = QTreeWidgetItem(sectionItem)
                     forumItem.setFlags(forumItem.flags() | QtCore.Qt.ItemIsUserCheckable)
                     forumItem.setText(0, recource['name'])
-                    forumItem.setCheckState(0, QtCore.Qt.Unchecked)
+                    forumItem.setCheckState(0, checkStatus)
                     forumItem.setIcon(0,QIcon(":img/mod.discuss.svg"))
                     for topic in recource['data']:
                         topicItem = QTreeWidgetItem(forumItem)
                         topicItem.setFlags(topicItem.flags() | QtCore.Qt.ItemIsUserCheckable)
                         topicItem.setText(0, topic['name'])
-                        topicItem.setCheckState(0, QtCore.Qt.Unchecked)
+                        topicItem.setCheckState(0,checkStatus)
                         topicItem.setIcon(0,QIcon(":img/mod.discuss.svg"))
+                        totalFiles += 1
                 elif recource['mod'] in ['url', 'resource', 'assign', 'page', 'videos']:
                     recourceItem = QTreeWidgetItem(sectionItem)
                     recourceItem.setFlags(recourceItem.flags() | QtCore.Qt.ItemIsUserCheckable)
                     recourceItem.setText(0, recource['name'])
-                    recourceItem.setCheckState(0, QtCore.Qt.Unchecked)
+                    recourceItem.setCheckState(0, checkStatus)
                     recourceItem.setIcon(0,QIcon(":img/mod."+recource['mod']+".svg"))
+                    totalFiles += 1
                 elif recource['mod'] == 'folder':
                     pass
         courseItem.removeChild(courseItem.child(0))
+        tStop = time.time()
+        self.print('載入課程 %s 花費%.3f秒, 共%d項資源'%(courseItem.text(0),tStop-tStart,totalFiles))
 
     def showFileList(self):
         backupList = []
@@ -356,10 +431,166 @@ class myGUI(QMainWindow):
             self.statusbar.showMessage('iLearn2連線失敗!')
             self.label_iLearn.setText('連線失敗!')
 
+    def readSetting(self):
+        if exists('setting.ini'):
+            self.config.read('setting.ini')
+        else:
+            self.config['User']={}
+            self.config['User']['userealfilename']='False'
+            self.config['dev']={}
+            self.config['dev']['nid']=''
+            self.config['dev']['pass']=''
+            self.config['dev']['autologin']=''
+            self.config['dev']['showloadtime']='False'
+            with open('setting.ini','w') as configfile:
+                self.config.write(configfile)
+
+class UserOptionWindow(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.resize(200, 200)
+        self.setWindowTitle('偏好設定')
+        self.vbox = QVBoxLayout()
+        self.useRealFileName = QCheckBox('使用原始檔名')
+        self.vbox.addWidget(self.useRealFileName)
+        self.setLayout(self.vbox)
+        self.config = ConfigParser()
+        self.readSetting()
+
+    def handle_show(self):
+        if self.isVisible()==False:
+            self.show()
+
+    def readSetting(self):
+        if exists('setting.ini'):
+            self.config.read('setting.ini')
+        else:
+            self.config['User']={}
+            self.config['User']['userealfilename']='False'
+            self.config['dev']={}
+            self.config['dev']['nid']=''
+            self.config['dev']['pass']=''
+            self.config['dev']['autologin']=''
+            self.config['dev']['showloadtime']='False'
+            with open('setting.ini','w') as configfile:
+                self.config.write(configfile)
+        self.useRealFileName.setChecked(self.config['User'].getboolean('userealfilename'))
+
+    def closeEvent(self, QCloseEvent):
+        self.config['User']['userealfilename'] =str(self.useRealFileName.isChecked())
+        with open('setting.ini','w') as configfile:
+            self.config.write(configfile)
+        self.close()
+
+class DevOptionWindow(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.resize(300, 200)
+        self.setWindowTitle('開發人員選項')
+        self.vbox = QVBoxLayout()
+
+        hbox_nid = QHBoxLayout()
+        hbox_nid.addWidget(QLabel('NID:'))
+        self.inp_nid = QLineEdit()
+        hbox_nid.addWidget(self.inp_nid)
+        self.vbox.addLayout(hbox_nid)
+
+        hbox_pass = QHBoxLayout()
+        hbox_pass.addWidget(QLabel('Pass:'))
+        self.inp_pass = QLineEdit()
+        hbox_pass.addWidget(self.inp_pass)
+        self.vbox.addLayout(hbox_pass)
+
+        self.autoLogin = QCheckBox('自動登入')
+        self.vbox.addWidget(self.autoLogin)
+        self.showTime = QCheckBox('顯示執行時間')
+        self.vbox.addWidget(self.showTime)
+
+        self.setLayout(self.vbox)
+        self.config = ConfigParser()
+        self.readSetting()
+
+    def handle_show(self):
+        if self.isVisible()==False:
+            self.show()
+
+    def readSetting(self):
+        if exists('setting.ini'):
+            self.config.read('setting.ini')
+        else:
+            self.config['User']={}
+            self.config['User']['userealfilename']='False'
+            self.config['dev']={}
+            self.config['dev']['nid']=''
+            self.config['dev']['pass']=''
+            self.config['dev']['autologin']='False'
+            self.config['dev']['showloadtime']='False'
+            with open('setting.ini','w') as configfile:
+                self.config.write(configfile)
+        self.inp_nid.setText(self.config['dev']['nid'])
+        self.inp_pass.setText(self.config['dev']['pass'])
+        self.autoLogin.setChecked(self.config['dev'].getboolean('autologin'))
+        self.showTime.setChecked(self.config['dev'].getboolean('showloadtime'))
+
+    def closeEvent(self, QCloseEvent):
+        self.handle_close()
+    def handle_close(self):
+        self.config['dev']['nid'] = self.inp_nid.text()
+        self.config['dev']['pass'] = self.inp_pass.text()
+        self.config['dev']['autologin'] = str(self.autoLogin.isChecked())
+        self.config['dev']['showloadtime'] = str(self.showTime.isChecked())
+        with open('setting.ini', 'w') as configfile:
+            self.config.write(configfile)
+        self.close()
+
+class UserOptionWindow(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.resize(300, 200)
+        self.setWindowTitle('偏好設定')
+        self.vbox = QVBoxLayout()
+        self.useRealFileName = QCheckBox('使用原始檔名')
+        self.vbox.addWidget(self.useRealFileName)
+        self.setLayout(self.vbox)
+        self.config = ConfigParser()
+        self.readSetting()
+
+    def handle_show(self):
+        if self.isVisible()==False:
+            self.show()
+
+    def readSetting(self):
+        if exists('setting.ini'):
+            self.config.read('setting.ini')
+        else:
+            self.config['User']={}
+            self.config['User']['userealfilename']='False'
+            self.config['dev']={}
+            self.config['dev']['nid']=''
+            self.config['dev']['pass']=''
+            self.config['dev']['autologin']=''
+            self.config['dev']['showloadtime']='False'
+            with open('setting.ini','w') as configfile:
+                self.config.write(configfile)
+
+    def closeEvent(self, QCloseEvent):
+        self.handle_close()
+
+    def handle_close(self):
+        self.config['User']['userealfilename'] = str(self.useRealFileName.isChecked())
+        with open('setting.ini', 'w') as configfile:
+            self.config.write(configfile)
+        self.close()
 
 if __name__ == '__main__':
 
     app = QApplication(sys.argv)
     mainGUI = myGUI()
+    UserOption = UserOptionWindow()
+    DevOption = DevOptionWindow()
+    mainGUI.signal_showUserOptionWindow.connect(UserOption.handle_show)
+    mainGUI.signal_close.connect(UserOption.closeEvent)
+    mainGUI.signal_showDevOptionWindow.connect(DevOption.handle_show)
+    mainGUI.signal_close.connect(DevOption.closeEvent)
 
     sys.exit(app.exec_())

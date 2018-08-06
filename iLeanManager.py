@@ -3,12 +3,11 @@ from bs4 import BeautifulSoup
 import FileDownloader
 from PyQt5.QtWidgets import QWidget
 from PyQt5.QtCore import pyqtSignal
-
+import time
 
 class iLearnManager(QWidget):
     signal_finishDownload = pyqtSignal()
     signal_Log = pyqtSignal(str)
-    signal_FinishGetCourseResource = pyqtSignal(list)
 
     def __init__(self, host='http://ilearn2.fcu.edu.tw'):
         super(iLearnManager,self).__init__()
@@ -17,6 +16,7 @@ class iLearnManager(QWidget):
         self.Pass = ""
         self.courseList = []
         self.host = host
+
 
     def print(self,msg):
         self.signal_Log.emit(msg)
@@ -39,7 +39,7 @@ class iLearnManager(QWidget):
     def Login(self):
         payload = {'username': self.NID, 'password': self.Pass}
         page = self.web.post(self.host+'/login/index.php', data=payload)
-        html = BeautifulSoup(page.text, 'html.parser')
+        html = BeautifulSoup(page.text, 'lxml')
         img_userpicture = html.find('img', {'class':'userpicture'})
         if img_userpicture is not None:
             userName = img_userpicture.get('title').split(' ')[1][:-3]
@@ -49,7 +49,7 @@ class iLearnManager(QWidget):
 
     def getCourseList(self):
         r = self.web.get(self.host)
-        soup = BeautifulSoup(r.text, 'html.parser')
+        soup = BeautifulSoup(r.text, 'lxml')
         div_course = soup.find_all('div', {"style": "font-size:1.1em;font-weight:bold;line-height:20px;"})
         CourseList = [div.a.attrs for div in div_course if 'class' not in div.a.attrs]
         for ele in CourseList:
@@ -58,9 +58,13 @@ class iLearnManager(QWidget):
         self.courseList = CourseList
         return CourseList
 
-    def getCourseMainResourceList(self, classInfo):
+    def getCourseMainResourceList(self, classInfo,showTime):
+        tStart = time.time()
         r = self.web.get(self.host+'/course/view.php?id=' + classInfo['id'])
-        soup = BeautifulSoup(r.text, 'html.parser')
+        tStop = time.time()
+        if showTime:
+            self.print('開啟%s頁面花費 %.3f 秒'%(classInfo['title'],tStop-tStart))
+        soup = BeautifulSoup(r.text, 'lxml')
         div_main = soup.find_all('ul', {"class": "topics"})[0]
         div_section = div_main.find_all('li',{'role':'region'})
         ResourceList = []
@@ -102,18 +106,20 @@ class iLearnManager(QWidget):
             string = string.replace(ele, ')')
         return string
 
-    def getCourseFileList(self, classInfo):
-        MainResourceList = self.getCourseMainResourceList(classInfo)
+    def getCourseFileList(self, classInfo,useRealFileName,showTime):
+        MainResourceList = self.getCourseMainResourceList(classInfo,showTime)
         FileList=[]
-
         for section in MainResourceList:
             recourceList = []
             for recource in section['mods']:
                 if recource['mod']=='forum':
-                    recource['data']=self.getFileList_forum(recource)
-                    recourceList.append(recource)
-                if recource['mod']=='resource':
-                    recource = self.getFileList_resource(recource)
+                    data =self.getFileList_forum(recource,showTime)
+                    if data!=None:
+                        recource['data']=data
+                        recourceList.append(recource)
+                elif recource['mod']=='resource':
+                    if useRealFileName==True:
+                        recource = self.getFileList_resource(recource,showTime)
                     recourceList.append(recource)
                 elif recource['mod'] in ['url', 'assign', 'page', 'videos']:
                     recourceList.append(recource)
@@ -122,12 +128,17 @@ class iLearnManager(QWidget):
                     recourceList.append(recource)
                 else:
                     self.print('發現不支援的課程模組 '+recource['mod']+' mod: '+recource['name'])
-            FileList.append({'section':section['name'],'mods':recourceList})
+            if len(recourceList)!=0:
+                FileList.append({'section':section['name'],'mods':recourceList})
         return FileList
 
-    def getFileList_forum(self, info):
+    def getFileList_forum(self, info,showTime):
         FileList = []
+        tStart = time.time()
         r = self.web.get('https://ilearn2.fcu.edu.tw/mod/forum/view.php?id=' + info['mod_id'])
+        tStop = time.time()
+        if showTime:
+            self.print('開啟討論區 %s頁面花費 %.3f 秒' % (info['name'], tStop - tStart))
         soup = BeautifulSoup(r.text, 'lxml')
         folderName = soup.find_all('div',{'role': 'main'})[0].h2.text
         allTopic = soup.find_all('td', {'class': 'topic starter'})
@@ -137,10 +148,17 @@ class iLearnManager(QWidget):
             mod_id = topic.a.get('href').split('d=')[1]
             name = self.removeIllageWord(topic.text)
             FileList.append({'path': path, 'mod': mod, 'mod_id': mod_id, 'name': name})
-        return FileList
+        if len(FileList)==0:
+            return None
+        else:
+            return FileList
 
-    def getFileList_resource(self, info):
+    def getFileList_resource(self, info,showTime):
+        tStart = time.time()
         r = self.web.get('https://ilearn2.fcu.edu.tw/mod/resource/view.php?id=' + info['mod_id'])
+        tStop = time.time()
+        if showTime:
+            self.print('開啟資源 %s頁面花費 %.3f 秒' % (info['name'], tStop - tStart))
         soup = BeautifulSoup(r.text, 'lxml')
         try:
             filename = soup.find('div',{'class':'resourceworkaround'}).a.text
