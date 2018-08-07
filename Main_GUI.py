@@ -256,24 +256,24 @@ class myGUI(QMainWindow):
         menubar = self.menuBar()
 
         fileMenu = menubar.addMenu(string._('File'))
-        closeAct = QAction(string._('Quit'), self)
+        closeAct = QAction(QIcon(':img/Close_Icon.png'),string._('Quit'), self)
         closeAct.triggered.connect(qApp.quit)
         fileMenu.addAction(closeAct)
 
         optMenu = menubar.addMenu(string._('Option'))
-        DevOptAct = QAction(string._('Developer options'),self)
+        DevOptAct = QAction(QIcon(':img/Settings_Icon.png'),string._('Developer options'),self)
         DevOptAct.triggered.connect(self.showDevOption)
-        UserOptionAction = QAction(string._('Preferences'),self)
+        UserOptionAction = QAction(QIcon(':img/Settings_Icon.png'),string._('Preferences'),self)
         UserOptionAction.triggered.connect(self.showUserOption)
         optMenu.addAction(UserOptionAction)
         optMenu.addAction(DevOptAct)
 
         helpMenu = menubar.addMenu(string._('Help'))
-        helpAct = QAction(string._('Help'), self)
+        helpAct = QAction(QIcon(':img/Help_Icon.png'),string._('Help'), self)
         helpAct.triggered.connect(self.showHelp)
-        aboutAct = QAction(string._('About'), self)
+        aboutAct = QAction(QIcon(':img/About_Icon.png'),string._('About'), self)
         aboutAct.triggered.connect(self.showInformation)
-        checkUpdateAct = QAction(string._('Check update'), self)
+        checkUpdateAct = QAction(QIcon(':img/Update_Icon.png'),string._('Check update'), self)
         checkUpdateAct.triggered.connect(self.checkUpdate)
         helpMenu.addAction(helpAct)
         helpMenu.addAction(checkUpdateAct)
@@ -549,6 +549,7 @@ class myGUI(QMainWindow):
 class DevOptionWindow(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setWindowIcon(QIcon(':img/Settings_Icon.png'))
         self.resize(300, 200)
         self.setWindowTitle(string._('Developer options'))
         self.vbox = QVBoxLayout()
@@ -612,6 +613,7 @@ class DevOptionWindow(QWidget):
 class UserOptionWindow(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setWindowIcon(QIcon(':img/Settings_Icon.png'))
         self.config = ConfigParser()
         self.readSetting()
         self.resize(300, 200)
