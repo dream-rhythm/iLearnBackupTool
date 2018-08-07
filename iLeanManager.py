@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup
 import FileDownloader
 from PyQt5.QtWidgets import QWidget
 from PyQt5.QtCore import pyqtSignal
+import language
 import time
 
 class iLearnManager(QWidget):
@@ -10,13 +11,15 @@ class iLearnManager(QWidget):
     signal_Log = pyqtSignal(str)
     signal_setStatusProcessBar=pyqtSignal(int,int)
 
-    def __init__(self, host='http://ilearn2.fcu.edu.tw'):
+    def __init__(self, host='http://ilearn2.fcu.edu.tw',lan='繁體中文'):
         super(iLearnManager,self).__init__()
         self.web = requests.Session()
         self.NID = ""
         self.Pass = ""
         self.courseList = []
         self.host = host
+        self.string = language.string()
+        self.string.setLanguage(lan)
         self.downloader={"forum/discuss":FileDownloader.discuss(),
                          "folder/resource":FileDownloader.folderResource(),
                          "resource":FileDownloader.resource(),
@@ -25,6 +28,7 @@ class iLearnManager(QWidget):
                          "assign":FileDownloader.assign(),
                          "videos":FileDownloader.videos()}
         for ele in self.downloader:
+            self.downloader[ele].setLanguage(lan)
             self.downloader[ele].signal_downloadNextFile.connect(self.finishDownload)
             self.downloader[ele].signal_errorMsg.connect(self.showErrorMsg)
             self.downloader[ele].signal_setStatusProcessBar.connect(self.setStatusProcessBar)
@@ -33,7 +37,7 @@ class iLearnManager(QWidget):
         self.signal_Log.emit(msg)
 
     def TestConnection(self):
-        self.print('正在測試與iLearn的連線...')
+        self.print(self.string._('Testing connection with iLearn2...'))
         page = self.web.get(self.host+"/login/index.php")
         html = BeautifulSoup(page.text, 'lxml')
         form_login = html.find('form', id='login')
@@ -74,7 +78,7 @@ class iLearnManager(QWidget):
         r = self.web.get(self.host+'/course/view.php?id=' + classInfo['id'])
         tStop = time.time()
         if showTime:
-            self.print('開啟%s頁面花費 %.3f 秒'%(classInfo['title'],tStop-tStart))
+            self.print(self.string._('Load page %s  in %.3f sec.')%(classInfo['title'],tStop-tStart))
         soup = BeautifulSoup(r.text, 'lxml')
         div_main = soup.find_all('ul', {"class": "topics"})[0]
         div_section = div_main.find_all('li',{'role':'region'})
@@ -140,7 +144,7 @@ class iLearnManager(QWidget):
                         recource['data'] = data
                         recourceList.append(recource)
                 else:
-                    self.print('發現不支援的課程模組 '+recource['mod']+' mod: '+recource['name'])
+                    self.print(self.string._('Find unsupport mod ')+recource['mod']+' mod: '+recource['name'])
             if len(recourceList)!=0:
                 FileList.append({'section':section['name'],'mods':recourceList})
         return FileList
@@ -151,7 +155,7 @@ class iLearnManager(QWidget):
         r = self.web.get('https://ilearn2.fcu.edu.tw/mod/forum/view.php?id=' + info['mod_id'])
         tStop = time.time()
         if showTime:
-            self.print('開啟討論區 %s頁面花費 %.3f 秒' % (info['name'], tStop - tStart))
+            self.print(self.string._('Load discuss page %s  in %.3f sec.') % (info['name'], tStop - tStart))
         soup = BeautifulSoup(r.text, 'lxml')
         folderName = soup.find_all('div',{'role': 'main'})[0].h2.text
         allTopic = soup.find_all('td', {'class': 'topic starter'})
@@ -171,7 +175,7 @@ class iLearnManager(QWidget):
         r = self.web.get('https://ilearn2.fcu.edu.tw/mod/resource/view.php?id=' + info['mod_id'])
         tStop = time.time()
         if showTime:
-            self.print('開啟資源 %s頁面花費 %.3f 秒' % (info['name'], tStop - tStart))
+            self.print(self.string._('Load resource page %s  in %.3f sec.') % (info['name'], tStop - tStart))
         soup = BeautifulSoup(r.text, 'lxml')
         try:
             filename = soup.find('div',{'class':'resourceworkaround'}).a.text
@@ -185,7 +189,7 @@ class iLearnManager(QWidget):
         r = self.web.get('https://ilearn2.fcu.edu.tw/mod/folder/view.php?id=' + info['mod_id'])
         tStop = time.time()
         if showTime:
-            self.print('開啟資料夾 %s頁面花費 %.3f 秒' % (info['name'], tStop - tStart))
+            self.print(self.string._('Load folder page %s  in %.3f sec.') % (info['name'], tStop - tStart))
         soup = BeautifulSoup(r.text, 'html.parser')
         FileList = []
         try:
@@ -205,7 +209,7 @@ class iLearnManager(QWidget):
 
     def DownloadFile(self,index, fileInfo):
         try:
-            self.downloader[fileInfo['mod']].setInformation(self.web, fileInfo, index)
+            self.downloader[fileInfo['mod']].setInformation(self.web, fileInfo, index,self.host)
             self.downloader[fileInfo['mod']].download()
         except Exception as e:
             self.print('error! '+str(e))
