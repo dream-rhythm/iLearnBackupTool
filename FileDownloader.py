@@ -1,4 +1,4 @@
-from os import makedirs,path,rename          # 匯入系統路徑模組
+from os import makedirs,path                # 匯入系統路徑模組
 from bs4 import BeautifulSoup               # 匯入網頁分析模組
 import img_qr                               # 匯入圖片
 from PyQt5 import QtCore  # 匯入Qt5控件, 核心, gui

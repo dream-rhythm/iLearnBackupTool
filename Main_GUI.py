@@ -45,6 +45,8 @@ class myGUI(QMainWindow):
         self.web = iLearnManager(self.host)
         self.init_iLearn()
         self.FileTree={}
+        self.success = 0
+        self.failed = 0
         self.fileList=[]
         self.nowLoad = 0
         self.signal_loginSuccess.connect(self.ShowResource)
@@ -57,7 +59,6 @@ class myGUI(QMainWindow):
 
     def closeEvent(self, event):
         self.signal_close.emit()
-        #time.sleep(0.5)
         self.close()
 
 
@@ -77,6 +78,7 @@ class myGUI(QMainWindow):
             ProcessBar = QProgressBar()
             self.StatusTable.setCellWidget(idx,3,ProcessBar)
         elif value==-2:
+            self.failed +=1
             self.StatusTable.removeCellWidget(idx, 3)       # 移除進度條之控件
             ErrorIcon = QIcon(":img/DownloadFailed.png")    # 開啟下載失敗之圖案
             item = QTableWidgetItem(ErrorIcon, string._('Download Falied'))  # 新增顯示失敗的元件
@@ -84,6 +86,7 @@ class myGUI(QMainWindow):
             if idx==len(self.fileList)-1:
                 self.signal_processbar_value(idx+1)
         elif value==101:
+            self.success +=1
             self.print(string._('Download file %d finish!')%(idx+1))
             self.StatusTable.removeCellWidget(idx, 3)
             OkIcon = QIcon(":img/FinishDownload.png")  # 開啟下載完成之圖案
@@ -92,6 +95,7 @@ class myGUI(QMainWindow):
             if idx==len(self.fileList)-1:
                 self.signal_processbar_value.emit(len(self.fileList))
                 self.signal_setStartBackupBtn.emit(string._('Start Backup'),True)
+                QMessageBox.information(self,string._("Download finish!"),string._("Success:%d\nFailed:%d")%(self.success,self.failed))
         else:
             ProcessBar = self.StatusTable.cellWidget(idx, 3)
             if ProcessBar == None:
@@ -297,9 +301,6 @@ class myGUI(QMainWindow):
         self.signal_showUserOptionWindow.emit()
 
     def showDevOption(self):
-        #DevOption = DevOptionWindow()
-        #DevOption.handle_show()
-        pass
         self.signal_showDevOptionWindow.emit()
 
     def Login(self):
@@ -496,6 +497,8 @@ class myGUI(QMainWindow):
         reqs = threadpool.makeRequests(self.startDownload, range(len(self.fileList)))
         for req in reqs:
             self.DownloadPool.putRequest(req)
+        self.success =  0
+        self.failed = 0
         if len(self.fileList) == 0:
             self.btn_StartBackup.setEnabled(True)
         else:
@@ -556,8 +559,12 @@ class myGUI(QMainWindow):
             self.config['dev']['showloadtime']='False'
             with open('setting.ini','w',encoding='utf-8') as configfile:
                 self.config.write(configfile)
+    def restart(self):
+        system('start iLearnBackupTool')
+        self.close()
 
 class DevOptionWindow(QWidget):
+    signal_restart = QtCore.pyqtSignal()
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowIcon(QIcon(':img/Settings_Icon.png'))
@@ -582,7 +589,7 @@ class DevOptionWindow(QWidget):
         self.vbox.addWidget(self.autoLogin)
         self.showTime = QCheckBox(string._('Show load time'))
         self.vbox.addWidget(self.showTime)
-        btn_saveButton = QPushButton('Save')
+        btn_saveButton = QPushButton(string._('Save and Restart'))
         btn_saveButton.clicked[bool].connect(self.write)
         hbox2 = QHBoxLayout()
         hbox2.addStretch(1)
@@ -625,12 +632,14 @@ class DevOptionWindow(QWidget):
         self.config['dev']['showloadtime'] = str(self.showTime.isChecked())
         with open('setting.ini', 'w',encoding='utf-8') as configfile:
             self.config.write(configfile)
+        self.signal_restart.emit()
         self.close()
 
     def closeWindow(self):
         self.close()
 
 class UserOptionWindow(QWidget):
+    signal_restart = QtCore.pyqtSignal()
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowIcon(QIcon(':img/Settings_Icon.png'))
@@ -652,7 +661,7 @@ class UserOptionWindow(QWidget):
         vbox.addWidget(QLabel(string._('      *This setting will cause load resouce very slow,\n       please be careful.')))
         self.vbox.addLayout(vbox)
         self.vbox.addWidget(QLabel(string._('New setting will be use on restart.')))
-        btn_saveButton = QPushButton('Save')
+        btn_saveButton = QPushButton(string._('Save and Restart'))
         btn_saveButton.clicked[bool].connect(self.write)
         hbox2 = QHBoxLayout()
         hbox2.addStretch(1)
@@ -695,6 +704,7 @@ class UserOptionWindow(QWidget):
         self.config['User']['userealfilename'] = str(self.useRealFileName.isChecked())
         with open('setting.ini', 'w',encoding='utf-8') as configfile:
             self.config.write(configfile)
+        self.signal_restart.emit()
         self.close()
 
     def closeWindow(self):
@@ -708,9 +718,9 @@ if __name__ == '__main__':
     DevOption = DevOptionWindow()
 
     mainGUI.signal_showUserOptionWindow.connect(UserOption.handle_show)
-    #mainGUI.close.connect(UserOption.closeWindow)
     mainGUI.signal_close.connect(UserOption.closeWindow)
     mainGUI.signal_showDevOptionWindow.connect(DevOption.handle_show)
     mainGUI.signal_close.connect(DevOption.closeWindow)
+    UserOption.signal_restart.connect(mainGUI.restart)
 
     sys.exit(app.exec_())
