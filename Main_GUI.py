@@ -6,7 +6,7 @@ from threading import Thread
 from iLeanManager import iLearnManager
 from functools import partial
 from os.path import exists
-from os import system
+from os import system,makedirs
 import language
 from PyQt5.QtWidgets import QApplication, QMainWindow, QAction, qApp, QMessageBox
 from PyQt5.QtWidgets import QGridLayout, QVBoxLayout, QGroupBox, QHBoxLayout, QTreeWidget, QTreeWidgetItem
@@ -57,7 +57,9 @@ class myGUI(QMainWindow):
 
     def closeEvent(self, event):
         self.signal_close.emit()
+        #time.sleep(0.5)
         self.close()
+
 
     def init_iLearn(self):
         self.web.signal_finishDownload.connect(self.startDownload)
@@ -220,15 +222,24 @@ class myGUI(QMainWindow):
         self.btn_StartBackup = QPushButton(string._('Start Backup'), self)
         self.btn_StartBackup.setEnabled(False)
         self.btn_StartBackup.clicked[bool].connect(self.StartBackup)
+        self.btn_OpenFolder = QPushButton(string._('Open Folder'), self)
+        self.btn_OpenFolder.clicked[bool].connect(self.OpenFolder)
 
         vbox = QVBoxLayout()
         vbox.addWidget(radio1)
         vbox.addWidget(radio2)
         vbox.addWidget(self.btn_StartBackup)
+        vbox.addWidget(self.btn_OpenFolder)
         vbox.addStretch(1)
         groupBox.setLayout(vbox)
 
+        if not exists('iLearn'):
+            makedirs('iLearn')
+
         return groupBox
+
+    def OpenFolder(self):
+        system("explorer iLearn")
 
     def createCourseGroup(self):
         groupBox = QGroupBox(string._('Step 2:Select sourse resource to backup'))
@@ -279,16 +290,16 @@ class myGUI(QMainWindow):
         helpMenu.addAction(checkUpdateAct)
         helpMenu.addAction(aboutAct)
 
-
-
     def showHelp(self):
         system("explorer http://github.com/fcu-d0441320/iLearnBackupTool")
-        pass
 
     def showUserOption(self):
         self.signal_showUserOptionWindow.emit()
 
     def showDevOption(self):
+        #DevOption = DevOptionWindow()
+        #DevOption.handle_show()
+        pass
         self.signal_showDevOptionWindow.emit()
 
     def Login(self):
@@ -571,7 +582,14 @@ class DevOptionWindow(QWidget):
         self.vbox.addWidget(self.autoLogin)
         self.showTime = QCheckBox(string._('Show load time'))
         self.vbox.addWidget(self.showTime)
+        btn_saveButton = QPushButton('Save')
+        btn_saveButton.clicked[bool].connect(self.write)
+        hbox2 = QHBoxLayout()
+        hbox2.addStretch(1)
+        hbox2.addWidget(btn_saveButton)
+        hbox2.addStretch(1)
 
+        self.vbox.addLayout(hbox2)
         self.setLayout(self.vbox)
         self.config = ConfigParser()
 
@@ -600,10 +618,7 @@ class DevOptionWindow(QWidget):
         self.autoLogin.setChecked(self.config['dev'].getboolean('autologin'))
         self.showTime.setChecked(self.config['dev'].getboolean('showloadtime'))
 
-    def closeEvent(self, QCloseEvent):
-        self.handle_close()
-
-    def handle_close(self):
+    def write(self):
         self.config['dev']['nid'] = self.inp_nid.text()
         self.config['dev']['pass'] = self.inp_pass.text()
         self.config['dev']['autologin'] = str(self.autoLogin.isChecked())
@@ -611,6 +626,7 @@ class DevOptionWindow(QWidget):
         with open('setting.ini', 'w',encoding='utf-8') as configfile:
             self.config.write(configfile)
         self.close()
+
     def closeWindow(self):
         self.close()
 
@@ -636,6 +652,14 @@ class UserOptionWindow(QWidget):
         vbox.addWidget(QLabel(string._('      *This setting will cause load resouce very slow,\n       please be careful.')))
         self.vbox.addLayout(vbox)
         self.vbox.addWidget(QLabel(string._('New setting will be use on restart.')))
+        btn_saveButton = QPushButton('Save')
+        btn_saveButton.clicked[bool].connect(self.write)
+        hbox2 = QHBoxLayout()
+        hbox2.addStretch(1)
+        hbox2.addWidget(btn_saveButton)
+        hbox2.addStretch(1)
+
+        self.vbox.addLayout(hbox2)
         self.vbox.addStretch(1)
         self.setLayout(self.vbox)
 
@@ -667,10 +691,7 @@ class UserOptionWindow(QWidget):
     def setLanguage(self,lan):
         self.config['User']['language']=lan
 
-    def closeEvent(self, QCloseEvent):
-        self.handle_close()
-
-    def handle_close(self):
+    def write(self):
         self.config['User']['userealfilename'] = str(self.useRealFileName.isChecked())
         with open('setting.ini', 'w',encoding='utf-8') as configfile:
             self.config.write(configfile)
@@ -685,7 +706,9 @@ if __name__ == '__main__':
     mainGUI = myGUI()
     UserOption = UserOptionWindow()
     DevOption = DevOptionWindow()
+
     mainGUI.signal_showUserOptionWindow.connect(UserOption.handle_show)
+    #mainGUI.close.connect(UserOption.closeWindow)
     mainGUI.signal_close.connect(UserOption.closeWindow)
     mainGUI.signal_showDevOptionWindow.connect(DevOption.handle_show)
     mainGUI.signal_close.connect(DevOption.closeWindow)

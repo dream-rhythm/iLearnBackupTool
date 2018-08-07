@@ -62,7 +62,8 @@ class string:
                               'Language':'語言設定',
                               'Show original file name in recource list.':'在資源選單中使用原始檔名',
                               '      *This setting will cause load resouce very slow,\n       please be careful.':'      *此設定會使得載入變得相當緩慢甚至卡死\n       請謹慎使用',
-                              'New setting will be use on restart.':'設定將於重啟後生效'
+                              'New setting will be use on restart.':'設定將於重啟後生效',
+                              'Open Folder':'開啟下載資料夾'
                      }
         self.English_Strings={'tool Information':'iLearn Backup Tool\nTool version：%.1f\nDeveloper:夢o旋律(陳琮斌),Aimerfan(簡瑞梓)'}
         self.LANGUAGE = '繁體中文'
