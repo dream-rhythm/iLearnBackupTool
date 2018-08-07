@@ -2,7 +2,6 @@ import sys
 import subprocess
 import requests
 import time
-import _thread
 from threading import Thread
 from iLeanManager import iLearnManager
 from functools import partial
@@ -19,7 +18,7 @@ import img_qr
 
 
 class myGUI(QMainWindow):
-    signal_startDownload = QtCore.pyqtSignal()
+    #signal_startDownload = QtCore.pyqtSignal(int)
     signal_loginSuccess = QtCore.pyqtSignal()
     signal_showUserOptionWindow = QtCore.pyqtSignal()
     signal_showDevOptionWindow = QtCore.pyqtSignal()
@@ -31,6 +30,7 @@ class myGUI(QMainWindow):
         super().__init__()
         self.config = ConfigParser()
         self.pool = threadpool.ThreadPool(4)
+        self.DownloadPool= threadpool.ThreadPool(1)
         self.readSetting()
         self.version = 0.1
         self.checkUpdate()
@@ -42,7 +42,6 @@ class myGUI(QMainWindow):
         self.FileTree={}
         self.fileList=[]
         self.nowLoad = 0
-        self.signal_startDownload.connect(self.startDownload)
         self.signal_loginSuccess.connect(self.ShowResource)
         self.signal_appenDownloadList.connect(self.appendItemToDownloadList)
         self.signal_processbar_value.connect(self.setProcessBarValue)
@@ -55,9 +54,39 @@ class myGUI(QMainWindow):
 
     def init_iLearn(self):
         self.web.signal_finishDownload.connect(self.startDownload)
+        self.web.signal_setStatusProcessBar.connect(self.setStatusProcessBar)
         self.web.signal_Log.connect(self.print)
         t = Thread(target=self.TestiLearnConnection)
         t.run()
+
+    def setStatusProcessBar(self,idx,value):
+        self.btn_StartBackup.setEnabled(False)
+        if value==-1:
+            ProcessBar = QProgressBar()
+            self.StatusTable.setCellWidget(idx,3,ProcessBar)
+        elif value==-2:
+            self.StatusTable.removeCellWidget(idx, 3)  # 移除進度條之控件
+            ErrorIcon = QIcon(":img/DownloadFailed.png")  # 開啟下載失敗之圖案
+            item = QTableWidgetItem(ErrorIcon, '下載失敗')  # 新增顯示失敗的元件
+            self.StatusTable.setItem(idx, 3, item)  # 將新元件設定到表格內
+            if idx==len(self.fileList)-1:
+                self.signal_processbar_value(idx+1)
+        elif value==101:
+            self.print('第 '+str(idx)+' 個檔案下載完成!')
+            self.StatusTable.removeCellWidget(idx, 3)
+            OkIcon = QIcon(":img/FinishDownload.png")  # 開啟下載完成之圖案
+            item = QTableWidgetItem(OkIcon, "OK")  # 新增顯示OK的元件
+            self.StatusTable.setItem(idx, 3, item)  # 將新元件設定到表格內
+            if idx==len(self.fileList)-1:
+                self.signal_processbar_value.emit(len(self.fileList))
+                self.btn_StartBackup.setEnabled(True)
+                self.btn_StartBackup.setText('開始下載...')
+        else:
+            ProcessBar = self.StatusTable.cellWidget(idx, 3)
+            if ProcessBar == None:
+                ProcessBar = QProgressBar()
+                self.StatusTable.setCellWidget(idx, 3, ProcessBar)
+            ProcessBar.setValue(value)
 
     def checkUpdate(self):
         with open('version.ini', mode='w') as f:
@@ -76,7 +105,8 @@ class myGUI(QMainWindow):
         (screen.height() - size.height()) / 2)
 
     def initUI(self):
-        self.setFixedSize(800,600)
+        #self.setFixedSize(800,600)
+        self.resize(800,600)
         self.moveToCenter()
         self.setWindowTitle('iLearn備份工具')
         self.statusbar.showMessage('備份工具啟動中...')
@@ -97,8 +127,8 @@ class myGUI(QMainWindow):
 
         self.grid.setColumnStretch(0,10)
         self.grid.setColumnStretch(1,20)
-        self.grid.setRowStretch(0, 10)
-        self.grid.setRowStretch(1, 10)
+        self.grid.setRowStretch(0, 6)
+        self.grid.setRowStretch(1, 6)
         self.grid.setRowStretch(2, 10)
         self.web = iLearnManager()
 
@@ -389,7 +419,7 @@ class myGUI(QMainWindow):
         self.print('載入課程 %s 花費%.3f秒, 共%d項資源'%(courseItem.text(0),tStop-tStart,totalFiles))
 
     def showFileList(self):
-        backupList = []
+        self.btn_StartBackup.setEnabled(False)
         courseIndex = 0
         for courseItem in [self.CourseTreeListRoot.child(i) for i in range(self.CourseTreeListRoot.childCount())]:
             courseIndex += 1
@@ -421,13 +451,17 @@ class myGUI(QMainWindow):
                                             fileName = fileItem.text(0)
                                             resource = [modData['data'][i] for i in range(len(modData['data'])) if  modData['data'][i]['name'] == fileName][0]
                                             self.signal_appenDownloadList.emit(resource)
-        self.nowDownload = 0
-        self.statusProcessBar.setFormat("正在下載...(%v/"+"%d)"%len(self.fileList))
-        self.signal_startDownload.emit()
+        time.sleep(0.5)
+        reqs = threadpool.makeRequests(self.startDownload, range(len(self.fileList)))
+        for req in reqs:
+            self.DownloadPool.putRequest(req)
+        self.statusProcessBar.setFormat("正在下載...(%v/" + "%d)" % len(self.fileList))
+        self.statusProcessBar.setMaximum(len(self.fileList))
+        if len(self.fileList) == 0:
+            self.btn_StartBackup.setEnabled(True)
 
     def appendItemToDownloadList(self,Item):
         self.fileList.append(Item)
-        self.btn_StartBackup.setEnabled(False)
         mod = Item['mod']
         if  '/' in mod:
             mod = mod.split('/')[1]
@@ -438,17 +472,16 @@ class myGUI(QMainWindow):
         self.StatusTable.setItem(row_count, 2, QTableWidgetItem(QIcon(':img/mod.%s.svg'%mod),Item['mod']))
         self.StatusTable.setItem(row_count, 3, QTableWidgetItem('等待中...'))
 
-    def startDownload(self):
-        if self.nowDownload < len(self.fileList):
-            self.web.DownloadFile(self.StatusTable,self.nowDownload,self.fileList[self.nowDownload])
-            self.nowDownload += 1
-            self.btn_StartBackup.setText('正在下載...('+str(self.nowDownload)+'/'+str(len(self.fileList))+')')
-            self.signal_processbar_value(self.nowDownload)
-            self.print('nowDownload='+str(self.nowDownload))
+    def startDownload(self,idx):
+        if idx < len(self.fileList):
+            self.btn_StartBackup.setText('正在下載...('+str(idx)+'/'+str(len(self.fileList))+')')
+            self.signal_processbar_value.emit(idx)
+            self.print('開始下載第 '+str(idx+1)+'個檔案')
+            self.web.DownloadFile(idx, self.fileList[idx])
+            time.sleep(0.5)
 
     def StartBackup(self):
         self.fileList=[]
-        self.nowDownload=0
         self.StatusTable.setRowCount(0)
         self.statusProcessBar.setFormat("正在獲取檔案清單(%v" +"/%d)" % self.CourseTreeListRoot.childCount())
         self.statusProcessBar.setMaximum(self.CourseTreeListRoot.childCount())
@@ -601,6 +634,7 @@ class UserOptionWindow(QWidget):
         else:
             self.config['User']={}
             self.config['User']['userealfilename']='False'
+            self.config['User']['language']='zh_tw'
             self.config['dev']={}
             self.config['dev']['nid']=''
             self.config['dev']['pass']=''

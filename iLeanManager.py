@@ -8,6 +8,7 @@ import time
 class iLearnManager(QWidget):
     signal_finishDownload = pyqtSignal()
     signal_Log = pyqtSignal(str)
+    signal_setStatusProcessBar=pyqtSignal(int,int)
 
     def __init__(self, host='http://ilearn2.fcu.edu.tw'):
         super(iLearnManager,self).__init__()
@@ -16,7 +17,17 @@ class iLearnManager(QWidget):
         self.Pass = ""
         self.courseList = []
         self.host = host
-
+        self.downloader={"forum/discuss":FileDownloader.discuss(),
+                         "folder/resource":FileDownloader.folderResource(),
+                         "resource":FileDownloader.resource(),
+                         "url":FileDownloader.url(),
+                         "page":FileDownloader.page(),
+                         "assign":FileDownloader.assign(),
+                         "videos":FileDownloader.videos()}
+        for ele in self.downloader:
+            self.downloader[ele].signal_downloadNextFile.connect(self.finishDownload)
+            self.downloader[ele].signal_errorMsg.connect(self.showErrorMsg)
+            self.downloader[ele].signal_setStatusProcessBar.connect(self.setStatusProcessBar)
 
     def print(self,msg):
         self.signal_Log.emit(msg)
@@ -192,28 +203,15 @@ class iLearnManager(QWidget):
                 pass
         return FileList
 
-    def DownloadFile(self, StatusTable, index, fileInfo):
-        if fileInfo['mod'] == 'forum/discuss':
-            downloader = FileDownloader.discuss()
-        elif fileInfo['mod'] == 'folder/resource':
-            downloader = FileDownloader.folderResource()
-        elif fileInfo['mod'] =='resource':
-            downloader = FileDownloader.resource()
-        elif fileInfo['mod']=='url':
-            downloader = FileDownloader.url()
-        elif fileInfo['mod']=='assign':
-            downloader = FileDownloader.assign()
-        elif fileInfo['mod']=='page':
-            downloader = FileDownloader.page()
-        elif fileInfo['mod']=='videos':
-            downloader = FileDownloader.videos()
-        else:
-            downloader = FileDownloader.BasicDownloader()
-        downloader.setInformation(self.web, fileInfo, StatusTable, index)
-        downloader.signal_downloadNextFile.connect(self.finishDownload)
-        downloader.signal_errorMsg.connect(self.showErrorMsg)
-        downloader.signal_printMsg.connect(self.print)
-        downloader.download()
+    def DownloadFile(self,index, fileInfo):
+        try:
+            self.downloader[fileInfo['mod']].setInformation(self.web, fileInfo, index)
+            self.downloader[fileInfo['mod']].download()
+        except Exception as e:
+            self.print('error! '+str(e))
+
+    def setStatusProcessBar(self,idx,value):
+        self.signal_setStatusProcessBar.emit(idx,value)
 
     def finishDownload(self):
         self.signal_finishDownload.emit()
