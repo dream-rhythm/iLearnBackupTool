@@ -574,10 +574,11 @@ class DevOptionWindow(QWidget):
 
         self.setLayout(self.vbox)
         self.config = ConfigParser()
-        self.readSetting()
+
 
     def handle_show(self):
         if self.isVisible()==False:
+            self.readSetting()
             self.show()
 
     def readSetting(self):
@@ -601,6 +602,7 @@ class DevOptionWindow(QWidget):
 
     def closeEvent(self, QCloseEvent):
         self.handle_close()
+
     def handle_close(self):
         self.config['dev']['nid'] = self.inp_nid.text()
         self.config['dev']['pass'] = self.inp_pass.text()
@@ -609,26 +611,24 @@ class DevOptionWindow(QWidget):
         with open('setting.ini', 'w',encoding='utf-8') as configfile:
             self.config.write(configfile)
         self.close()
+    def closeWindow(self):
+        self.close()
 
 class UserOptionWindow(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowIcon(QIcon(':img/Settings_Icon.png'))
         self.config = ConfigParser()
-        self.readSetting()
         self.resize(300, 200)
         self.setWindowTitle(string._('Preferences'))
         self.vbox = QVBoxLayout()
         hbox = QHBoxLayout()
-        combo = QComboBox()
-        combo.addItem("繁體中文")
-        combo.addItem("English")
-        combo.activated[str].connect(self.setLanguage)
-        index = combo.findText(self.config['User']['language'], QtCore.Qt.MatchFixedString)
-        if index >= 0:
-            combo.setCurrentIndex(index)
+        self.combo = QComboBox()
+        self.combo.addItem("繁體中文")
+        self.combo.addItem("English")
+        self.combo.activated[str].connect(self.setLanguage)
         hbox.addWidget(QLabel(string._('Language')))
-        hbox.addWidget(combo)
+        hbox.addWidget(self.combo)
         self.vbox.addLayout(hbox)
         self.useRealFileName = QCheckBox(string._('Show original file name in recource list.'))
         vbox = QVBoxLayout()
@@ -642,6 +642,7 @@ class UserOptionWindow(QWidget):
 
     def handle_show(self):
         if self.isVisible()==False:
+            self.readSetting()
             self.show()
 
     def readSetting(self):
@@ -658,6 +659,10 @@ class UserOptionWindow(QWidget):
             self.config['dev']['showloadtime']='False'
             with open('setting.ini','w',encoding='utf-8') as configfile:
                 self.config.write(configfile)
+        index = self.combo.findText(self.config['User']['language'], QtCore.Qt.MatchFixedString)
+        if index >= 0:
+            self.combo.setCurrentIndex(index)
+        self.useRealFileName.setChecked(self.config['User'].getboolean('userealfilename'))
 
     def setLanguage(self,lan):
         self.config['User']['language']=lan
@@ -671,6 +676,9 @@ class UserOptionWindow(QWidget):
             self.config.write(configfile)
         self.close()
 
+    def closeWindow(self):
+        self.close()
+
 if __name__ == '__main__':
 
     app = QApplication(sys.argv)
@@ -678,8 +686,8 @@ if __name__ == '__main__':
     UserOption = UserOptionWindow()
     DevOption = DevOptionWindow()
     mainGUI.signal_showUserOptionWindow.connect(UserOption.handle_show)
-    mainGUI.signal_close.connect(UserOption.closeEvent)
+    mainGUI.signal_close.connect(UserOption.closeWindow)
     mainGUI.signal_showDevOptionWindow.connect(DevOption.handle_show)
-    mainGUI.signal_close.connect(DevOption.closeEvent)
+    mainGUI.signal_close.connect(DevOption.closeWindow)
 
     sys.exit(app.exec_())
