@@ -1,7 +1,7 @@
 # iLearnBackupTool
 
 
-![](http://nicky.lionfree.net/iLearnBackupTool/iLearnBackupTool.png)
+![](http://nicky.lionfree.net/iLearnBackupTool/iLearnBackupTool.PNG)
 
 ## 簡介
     這是一個逢甲大學線上教學平台(iLearn)的備份工具
@@ -33,18 +33,28 @@
     6. 等待加載完成後，選擇想要備份的資料
     7. 按開始備份
     8. 打個球聊個天回家收割成果ヽ(✿ﾟ▽ﾟ)ノ
+    
+## 版本資訊
+* v1.0:
+    1. 爬取iLearn頁面並下載資源
+    2. 自動檢查更新
+    3. iLearn資源斷點續傳功能
+    4. 失敗列表自動重試功能
 
 ## Bug&想做但尚未實做的功能
 > Bug
->> 1. iLearn伺服器出現資料庫寫入錯誤時，會導致下載失敗('content-length')
+>> 1. Learn伺服器拒絕下載時，會導致下載失敗('content-length')
 >> 2. 有助教權限的作業頁面，若尚未有人繳交作業也會出現錯誤'content-length'
 >> 
 > 想做但尚未實做的功能
->> 1.測驗卷
->> 2.槽狀資料夾
->> 3.備份成網頁模板(php)
+>> 1. 測驗卷
+>> 2. 槽狀資料夾
+>> 3. 備份成網頁模板(php)
 
-## 使用套件
+## 開發環境與套件
+* Windows 10
+* PyCharm
+* Python 3.6.6 x86版本
 * PyQt5
 * Pyinstller-dev
 * BeautifulSoup
