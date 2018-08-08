@@ -1,10 +1,11 @@
 import os
 import requests
-from PyQt5.QtWidgets import QApplication, QWidget, QMessageBox
+from PyQt5.QtWidgets import QWidget, QMessageBox
 from PyQt5.QtWidgets import QProgressBar, QLabel
 from PyQt5.QtCore import QCoreApplication, QThread, pyqtSignal
 from PyQt5.QtGui import QIcon
 import language
+import subprocess
 import img_qr
 
 
@@ -53,7 +54,6 @@ class UpdaterGUI(QWidget):
         self.downloader.error.connect(self.errorHandler)
         self.downloader.finished.connect(self.finished)
         self.string = language.string()
-        #self.signal_startDownload.connect(self.startDownload)
 
     def startDownload(self,language):
         self.string.setLanguage(language)
@@ -96,49 +96,8 @@ class UpdaterGUI(QWidget):
             f.write("@ rename %s %s\n"%(tempfile,downfile))
             f.write("@ start iLearnBackupTool\n")
             f.write("@ exit\n")
-        os.system("start update.cmd")
+        subprocess.Popen("update.cmd")
         QCoreApplication.instance().quit()
 
     def closeWindow(self):
         QCoreApplication.instance().quit()
-
-"""
-if __name__ == '__main__':
-
-    def str2bool(s):
-        sl = s.lower()
-        if sl in ("yes", "true", "t", "1"):
-            return True
-        elif sl in ('no', 'false', 'f', '0'):
-            return False
-        else:
-            raise ValueError(s)
-
-    args = {'check': True, 'restart': True}
-
-    if len(sys.argv) > 1:
-
-        try:
-            for arg in sys.argv[1:]:
-                pm = arg.lower()
-                split = pm.split('=')
-                if split[0] == 'check':
-                    args['check'] = str2bool(split[1])
-                elif split[0] == 'restart':
-                    args['restart'] = str2bool(split[1])
-                else:
-                    raise ValueError(arg)
-        except ValueError as ve:
-            print('\'' + str(ve) + '\'' + ' is not a valid parameter')
-            exit(1)
-
-    # 主要執行部分
-    if args['check']:
-        app = QApplication(sys.argv)
-        updater = UpdaterGUI()
-        app.exec_()
-    if args['restart']:
-        subprocess.Popen(downfile)
-
-    sys.exit(0)
-"""
