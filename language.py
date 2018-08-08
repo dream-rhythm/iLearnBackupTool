@@ -63,7 +63,16 @@ class string:
                               'Show original file name in recource list.':'在資源選單中使用原始檔名',
                               '      *This setting will cause load resouce very slow,\n       please be careful.':'      *此設定會使得載入變得相當緩慢甚至卡死\n       請謹慎使用',
                               'New setting will be use on restart.':'設定將於重啟後生效',
-                              'Open Folder':'開啟下載資料夾'
+                              'Open Folder':'開啟下載資料夾',
+                              'Save and Restart':'儲存並重新啟動',
+                              "Success:%d\nFailed:%d":"成功:%d\n失敗:%d",
+                              "Download finish!":"下載完成!",
+                              "General setting":"一般設定",
+                              "Retry setting":"重試設定",
+                              'Retry times:':'重試次數:',
+                              'Second between retry:':'重試間隔(秒):',
+                              "Speed: ":"下載速度: ",
+                              'Download will retry after %d sec.':'將在 %d 秒後進行重試'
                      }
         self.English_Strings={'tool Information':'iLearn Backup Tool\nTool version：%.1f\nDeveloper:夢o旋律(陳琮斌),Aimerfan(簡瑞梓)'}
         self.LANGUAGE = '繁體中文'

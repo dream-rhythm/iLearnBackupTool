@@ -1,4 +1,4 @@
-from os import makedirs,path,rename          # 匯入系統路徑模組
+from os import makedirs,path                # 匯入系統路徑模組
 from bs4 import BeautifulSoup               # 匯入網頁分析模組
 import img_qr                               # 匯入圖片
 from PyQt5 import QtCore  # 匯入Qt5控件, 核心, gui
@@ -11,17 +11,28 @@ class BasicDownloader(QtCore.QThread):              # 定義BasicDownloader(需�
     signal_downloadNextFile = QtCore.pyqtSignal()   # 定義呼叫下載下一個檔案之訊號(回呼iLearnManager用的)
     signal_finishDownload = QtCore.pyqtSignal()     # 定義下載完成顯示"完成"之訊號
     signal_errorMsg = QtCore.pyqtSignal(str)        # 定義下載時發生例外時發出的訊號
+    signal_printMsg = QtCore.pyqtSignal(str)  # 定義下載時發生例外時發出的訊號
     signal_setStatusProcessBar = QtCore.pyqtSignal(int, int) #定義修改進度條之訊號(index,value)
+    signal_setStatusBarText = QtCore.pyqtSignal(str)
+    signal_startDownlooad = QtCore.pyqtSignal()
 
     def __init__(self):                       # 定義建構子
         super().__init__()                          # 初始化父類別
         self.signal_processBar.connect(self.ChangeProcessBarValue)  # 將收到"修改進度條"之訊號時的動作綁定副程式
         self.signal_finishDownload.connect(self.FinishDownload)     # 將收到"下載完成"之訊號時的動作綁定副程式
         self.signal_errorMsg.connect(self.showError)                # 將收到"有錯誤發生時"之訊號時的動作綁定副程式
+        self.string = language.string()
+        self.signal_startDownlooad.connect(self.startDownloadSpeedTimer)
+        self.speedCountTimer = QtCore.QTimer()
+        self.speedCountTimer.timeout.connect(self.showSpeed)
+        self.DownloadReady = 0
+        self.lastSpeedDownload=0
+        self.ms=500
 
     def setLanguage(self,lan):
-        self.string = language.string()
         self.string.setLanguage(lan)
+    def startDownloadSpeedTimer(self):
+        self.speedCountTimer.start(self.ms)
 
     def setInformation(self, session, Fileinfo, index, host):    # 設定資料
         self.host = host                            # 設定moodle主機網址
@@ -41,6 +52,20 @@ class BasicDownloader(QtCore.QThread):              # 定義BasicDownloader(需�
 
     def showError(self,Msg):                                # 此副函式用來顯示下載失敗之訊息(綁定"有錯誤發生"之訊號)
         self.signal_setStatusProcessBar.emit(self.idx, -2)
+    def print(self,Msg):
+        self.signal_printMsg.emit(str(Msg))
+
+    def showSpeed(self):
+        speed = (self.DownloadReady - self.lastSpeedDownload) * 1024*1000/self.ms    #bytes
+        text = "%dbytes/s"
+        if speed>1024:
+            speed/=1024
+            text = "%.2fKb/s"
+        if speed>1024:
+            speed/=1024
+            text = "%.2fMb/s"
+        self.lastSpeedDownload = self.DownloadReady
+        self.signal_setStatusBarText.emit(self.string._("Speed: ")+text%speed)
 
     def download(self):
         """
@@ -60,22 +85,38 @@ class BasicDownloader(QtCore.QThread):              # 定義BasicDownloader(需�
 
     def downloadWithRealUrl(self, url, filename):       # 實際下載程式(於新開執行緒進行下載)
         try:
+            self.signal_startDownlooad.emit()
+            self.DownloadReady = 0
+            self.lastSpeedDownload=0
             url = str(url)
-            r = self.session.get(url,stream=True)       # 獲取檔案(注意:因需將檔案分段下載才能實現進度條, 故request須設定為串流模式stream=True)
+            headers = {'Accept-Encoding': 'gzip, deflate, br'}
+            r = self.session.get(url,headers=headers,stream=True)# 獲取檔案(注意:因需將檔案分段下載才能實現進度條, 故request須設定為串流模式stream=True)
             chunk_size = 1024                           # 設定每個片段之大小(bytes)
             offset=0                                    # 設定當前以下載位元組為0
-            fileSize = int(r.headers['content-length'])   # 從header獲取檔案長度
+            try:
+                fileSize = int(r.headers['content-length'])   # 從header獲取檔案長度
+            except:
+                fileSize = 0
             if path.exists(self.path+'/'+filename):        # 判斷這個檔案是否已存在
                 if path.getsize(self.path+'/'+filename)==fileSize:  #   判斷檔案是否已下載完成
+                    self.speedCountTimer.stop()
                     self.signal_finishDownload.emit()                   # 若已下載完成直接發出"下載完成之訊號"
                     return                                              # 然後離開副程式
-            with open(self.path+'/'+filename,"wb") as file:# 開啟要寫入之檔案
+                else:
+                    headers['Range']='bytes=%d-' % path.getsize(self.path+'/'+filename)
+                    r = self.session.get(url, headers=headers, stream=True)
+                    fileSize = int(r.headers['content-length'])
+            with open(self.path+'/'+filename,"ab") as file:# 開啟要寫入之檔案
                 for data in r.iter_content(chunk_size=chunk_size):  # 使用request之iter_content方法迭代串流數據
+                    self.DownloadReady+=1
                     file.write(data)                                    # 將數據寫入檔案
                     offset += len(data)                                 # 更新已下載之大小
-                    self.signal_processBar.emit(offset/fileSize)        # 使用emit函式發出"更新進度條"之訊號
+                    if fileSize!=0:
+                        self.signal_processBar.emit(offset/fileSize)        # 使用emit函式發出"更新進度條"之訊號
+            self.speedCountTimer.stop()
             self.signal_finishDownload.emit()             # 下載完成後發出"下載完成之訊號"
         except Exception as e:
+            self.speedCountTimer.stop()
             self.signal_errorMsg.emit(self.string._('There has some exception when download %s, so download failed...\nException:')%(filename) + str(e))
 
 class discuss(BasicDownloader):                 # 繼承自BasicDownloader
@@ -146,12 +187,12 @@ class url(BasicDownloader):
             lnk['InternetShortcut']={}
             lnk['InternetShortcut']['IDList']=''
             lnk['InternetShortcut']['URL']=str(realUrl)
-            self.Fileinfo['name']+='.url'
-            with open(self.path+'/'+self.Fileinfo['name'],mode='w') as f:
+            #self.Fileinfo['name']+='.url'
+            with open(self.path+'/'+self.Fileinfo['name']+'.url',mode='w') as f:
                 lnk.write(f)
             self.signal_finishDownload.emit()
         except Exception as e:
-            self.signal_errorMsg.emit(self.string._('There has some exception when download %s/%s, so download failed...\nException:') % (self.path, self.Fileinfo['name']) + str(e))
+            self.signal_errorMsg.emit(self.string._('There has some exception when download %s/%s, so download failed...\nException:') % (self.path, self.Fileinfo['name']+'.url') + str(e))
 
 class assign(BasicDownloader):
     def __init__(self):                         # 初始化
@@ -196,12 +237,12 @@ class page(BasicDownloader):
             r = self.session.get(url)  # 獲取資料
             html = BeautifulSoup(r.text, 'lxml')  # 使用BeautifulSoup進行分析
             page = html.find('div', {'role': 'main'})  # 尋找議題內容
-            self.Fileinfo['name'] += '.txt'
-            with open(self.path+'/'+self.Fileinfo['name'],mode='w',encoding='utf-8') as f:
+            #self.Fileinfo['name'] += '.txt'
+            with open(self.path+'/'+self.Fileinfo['name']+'.txt',mode='w',encoding='utf-8') as f:
                 f.write(page.text)
             self.signal_finishDownload.emit()
         except Exception as e:
-            self.signal_errorMsg.emit(self.string._('There has some exception when download %s/%s, so download failed...\nException:') % (self.path, self.Fileinfo['name']) + str(e))
+            self.signal_errorMsg.emit(self.string._('There has some exception when download %s/%s, so download failed...\nException:') % (self.path, self.Fileinfo['name']+'.txt') + str(e))
 
 class videos(BasicDownloader):
     def __init__(self):                         # 初始化

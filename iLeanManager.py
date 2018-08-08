@@ -10,6 +10,7 @@ class iLearnManager(QWidget):
     signal_finishDownload = pyqtSignal()
     signal_Log = pyqtSignal(str)
     signal_setStatusProcessBar=pyqtSignal(int,int)
+    signal_setStatusBarText = pyqtSignal(str)
 
     def __init__(self, host='http://ilearn2.fcu.edu.tw',lan='繁體中文'):
         super(iLearnManager,self).__init__()
@@ -31,8 +32,11 @@ class iLearnManager(QWidget):
             self.downloader[ele].setLanguage(lan)
             self.downloader[ele].signal_downloadNextFile.connect(self.finishDownload)
             self.downloader[ele].signal_errorMsg.connect(self.showErrorMsg)
+            self.downloader[ele].signal_printMsg.connect(self.print)
             self.downloader[ele].signal_setStatusProcessBar.connect(self.setStatusProcessBar)
-
+            self.downloader[ele].signal_setStatusBarText.connect(self.setStatusBarText)
+    def setStatusBarText(self,s):
+        self.signal_setStatusBarText.emit(s)
     def print(self,msg):
         self.signal_Log.emit(msg)
 
