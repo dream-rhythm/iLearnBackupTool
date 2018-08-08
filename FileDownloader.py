@@ -119,6 +119,7 @@ class BasicDownloader(QtCore.QThread):              # 定義BasicDownloader(需�
             self.speedCountTimer.stop()
             self.signal_errorMsg.emit(self.string._('There has some exception when download %s, so download failed...\nException:')%(filename) + str(e))
 
+
 class discuss(BasicDownloader):                 # 繼承自BasicDownloader
     def __init__(self):                         # 初始化
         super().__init__()                      # 初始化父類別
@@ -143,6 +144,7 @@ class discuss(BasicDownloader):                 # 繼承自BasicDownloader
         except Exception as e:
             self.signal_errorMsg.emit(self.string._('There has some exception when download %s/%s, so download failed...\nException:')% (self.path,'討論區內容') + str(e))
 
+
 class folderResource(BasicDownloader):
     def __init__(self):                         # 初始化
         super().__init__()                      # 初始化父類別
@@ -150,9 +152,10 @@ class folderResource(BasicDownloader):
     def HtmlPaser(self):                                    # 重載HtmlPaser
         url = self.Fileinfo['mod_id']                        # 生成網址
         try:
-            self.downloadWithRealUrl(url,self.Fileinfo['name'])          # 下載
+            self.downloadWithRealUrl(url, self.Fileinfo['name'])          # 下載
         except Exception as e:
             self.signal_errorMsg.emit(self.string._('There has some exception when download %s/%s, so download failed...\nException:') % (self.path, self.Fileinfo['name']) + str(e))
+
 
 class resource(BasicDownloader):
     def __init__(self):                         # 初始化
@@ -170,6 +173,7 @@ class resource(BasicDownloader):
             self.downloadWithRealUrl(url,filename)          # 下載
         except Exception as e:
             self.signal_errorMsg.emit(self.string._('There has some exception when download %s/%s, so download failed...\nException:') % (self.path, self.Fileinfo['name']) + str(e))
+
 
 class url(BasicDownloader):
     def __init__(self):                         # 初始化
@@ -193,6 +197,7 @@ class url(BasicDownloader):
             self.signal_finishDownload.emit()
         except Exception as e:
             self.signal_errorMsg.emit(self.string._('There has some exception when download %s/%s, so download failed...\nException:') % (self.path, self.Fileinfo['name']+'.url') + str(e))
+
 
 class assign(BasicDownloader):
     def __init__(self):                         # 初始化
@@ -227,6 +232,7 @@ class assign(BasicDownloader):
         except Exception as e:
             self.signal_errorMsg.emit(self.string._('There has some exception when download %s/%s, so download failed...\nException:') % (self.path, filename) + str(e))
 
+
 class page(BasicDownloader):
     def __init__(self):                         # 初始化
         super().__init__()                      # 初始化父類別
@@ -243,6 +249,7 @@ class page(BasicDownloader):
             self.signal_finishDownload.emit()
         except Exception as e:
             self.signal_errorMsg.emit(self.string._('There has some exception when download %s/%s, so download failed...\nException:') % (self.path, self.Fileinfo['name']+'.txt') + str(e))
+
 
 class videos(BasicDownloader):
     def __init__(self):                         # 初始化

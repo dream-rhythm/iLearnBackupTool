@@ -6,7 +6,7 @@ from threading import Thread
 from iLeanManager import iLearnManager
 from functools import partial
 from os.path import exists
-from os import system,makedirs
+from os import system, makedirs
 import language
 from PyQt5.QtWidgets import QApplication, QMainWindow, QAction, qApp, QMessageBox
 from PyQt5.QtWidgets import QGridLayout, QVBoxLayout, QGroupBox, QHBoxLayout, QTreeWidget, QTreeWidgetItem
@@ -143,7 +143,7 @@ class myGUI(QMainWindow):
         versionFile = s.get('https://raw.githubusercontent.com/fcu-d0441320/iLearnBackupTool/master/version.ini')
         version = float(versionFile.text)
         if version > self.version:
-            subprocess.Popen('Updater.exe')
+            subprocess.Popen('Updater_GUI.exe')
             sys.exit()
 
     def moveToCenter(self):
