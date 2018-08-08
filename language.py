@@ -73,9 +73,13 @@ class string:
                               'Second between retry:':'重試間隔(秒):',
                               "Speed: ":"下載速度: ",
                               'Download will retry after %d sec.':'將在 %d 秒後進行重試',
-                              'Find New Version:%.1d\nNow Vsrsion:%.1f\nDo you want to update?':'發現更新版本:%.1f\n當前版本:%.1f\n請問您要更新嗎?',
+                              'Find New Version:%.1f\nNow Vsrsion:%.1f\nDo you want to update?':'發現更新版本:%.1f\n當前版本:%.1f\n請問您要更新嗎?',
                               'Find New version':'發現新版本',
-                              'This is the latest version':'這是最新版本'
+                              'This is the latest version':'這是最新版本',
+                              'Update is in process...':'程式更新中...',
+                              'Download success!':'下載成功!',
+                              'Oops! Something error!':'噢奧!出錯了!',
+                              'iLearnBackupTool Updater':'iLearn備份工具 更新程式'
                      }
         self.English_Strings={'tool Information':'iLearn Backup Tool\nTool version：%.1f\nDeveloper:夢o旋律(陳琮斌),Aimerfan(簡瑞梓)'}
         self.LANGUAGE = '繁體中文'
@@ -84,12 +88,10 @@ class string:
         self.LANGUAGE = lan
 
     def _(self,s):
-        if self.LANGUAGE == '繁體中文':
-            return self.zh_tw_Strings[s]
-        if self.LANGUAGE == 'English':
-            if s in self.English_Strings:
+        try:
+            if self.LANGUAGE == '繁體中文':
+                return self.zh_tw_Strings[s]
+            elif self.LANGUAGE == 'English':
                 return self.English_Strings[s]
-            else:
-                return s
-        else:
+        except:
             return s

@@ -30,7 +30,7 @@ class myGUI(QMainWindow):
     signal_close = QtCore.pyqtSignal()
     signal_appendDownloadList = QtCore.pyqtSignal(dict)
     signal_processbar_value = QtCore.pyqtSignal(int)
-    signal_startUpdate = QtCore.pyqtSignal()
+    signal_startUpdate = QtCore.pyqtSignal(str)
 
     def __init__(self):
         super().__init__()
@@ -39,7 +39,7 @@ class myGUI(QMainWindow):
         self.DownloadPool= threadpool.ThreadPool(1)
         self.readSetting()
         string.setLanguage(self.config['User']['language'])
-        self.version = 0
+        self.version = 0.1
         self.host='https://ilearn2.fcu.edu.tw'
         self.statusbar = self.statusBar()
         self.initUI()
@@ -151,11 +151,11 @@ class myGUI(QMainWindow):
         versionFile = s.get('https://raw.githubusercontent.com/fcu-d0441320/iLearnBackupTool/master/version.ini')
         version = float(versionFile.text)
         if version > self.version:
-            reply = QMessageBox.question(self, string._('Find New version'), string._('Find New Version:%.1d\nNow Vsrsion:%.1f\nDo you want to update?')%(version,self.version),
+            reply = QMessageBox.question(self, string._('Find New version'), string._('Find New Version:%.1f\nNow Vsrsion:%.1f\nDo you want to update?')%(version,self.version),
                                          QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
             if reply== QMessageBox.Yes:
                 self.setVisible(False)
-                self.signal_startUpdate.emit()
+                self.signal_startUpdate.emit(self.config['User']['language'])
         else:
             QMessageBox.information(self,string._('This is the latest version'),string._('This is the latest version'))
                 #QMessageBox().information(self,"有更新版本!","發現有新版本，請前往官網更新，或檢查是否與Updater_GUI.exe放置於相同資料夾!")

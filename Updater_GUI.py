@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import QApplication, QWidget, QMessageBox
 from PyQt5.QtWidgets import QProgressBar, QLabel
 from PyQt5.QtCore import QCoreApplication, QThread, pyqtSignal
 from PyQt5.QtGui import QIcon
+import language
 import img_qr
 
 
@@ -53,14 +54,17 @@ class UpdaterGUI(QWidget):
         self.downloader.gotchunk.connect(self.setProgressValue)
         self.downloader.error.connect(self.errorHandler)
         self.downloader.finished.connect(self.finished)
+        self.string = language.string()
         #self.signal_startDownload.connect(self.startDownload)
 
-    def startDownload(self):
+    def startDownload(self,language):
+        self.string.setLanguage(language)
+        self.setWindowTitle(self.string._('iLearnBackupTool Updater'))
         self.show()
         self.downloader.start()
 
     def initGUI(self):
-        self.setWindowTitle('iLearnBackupTool Updater')
+
         self.resize(975, 35)
 
         self.progressbar.setGeometry(5, 5, 1000, 25)
@@ -78,16 +82,15 @@ class UpdaterGUI(QWidget):
         self.progresslabel.setText('{0:.2f}%'.format(val * 100))
 
     def errorHandler(self, err_msg):
-        QMessageBox.information(self, '噢奧!出錯了!', err_msg, QMessageBox.Ok)
+        QMessageBox.information(self, self.string._('Oops! Something error!'), err_msg, QMessageBox.Ok)
         os.remove(tempfile)
         QCoreApplication.instance().quit()
 
     def finished(self):
-        QMessageBox.information(self, '下載完成', '下載成功！', QMessageBox.Ok)
-        #os.remove(downfile)
-        #os.rename(tempfile, downfile)
+        QMessageBox.information(self, self.string._('Download finish!'), self.string._('Download success!'), QMessageBox.Ok)
         with open("update.cmd","w")as f:
-            f.write('@ echo 程式更新中...\n')
+            f.write('@ echo %s\n'%(self.string._('Update is in process...')))
+            f.write('@ Title %s\n'%(self.string._('Update is in process...')))
             f.write('@ ping 127.0.0.1 -n 3 -w 1000 > nul\n')
             f.write('@ taskkill -F -T -FI "IMAGENAME eq iLearnBackupTool.exe"\n')
             f.write('@ ping 127.0.0.1 -n 2 -w 1000 > nul\n')
