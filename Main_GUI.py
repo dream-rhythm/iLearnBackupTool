@@ -1,5 +1,4 @@
 import sys
-import subprocess
 import requests
 import time
 from threading import Thread
@@ -39,7 +38,7 @@ class myGUI(QMainWindow):
         self.DownloadPool= threadpool.ThreadPool(1)
         self.readSetting()
         string.setLanguage(self.config['User']['language'])
-        self.version = 0.1
+        self.version = 1.0
         self.host='https://ilearn2.fcu.edu.tw'
         self.statusbar = self.statusBar()
         self.initUI()

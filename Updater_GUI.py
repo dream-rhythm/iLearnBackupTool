@@ -1,7 +1,5 @@
 import os
-import sys
 import requests
-import subprocess
 from PyQt5.QtWidgets import QApplication, QWidget, QMessageBox
 from PyQt5.QtWidgets import QProgressBar, QLabel
 from PyQt5.QtCore import QCoreApplication, QThread, pyqtSignal
