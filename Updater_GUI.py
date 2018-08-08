@@ -5,6 +5,8 @@ import subprocess
 from PyQt5.QtWidgets import QApplication, QWidget, QMessageBox
 from PyQt5.QtWidgets import QProgressBar, QLabel
 from PyQt5.QtCore import QCoreApplication, QThread, pyqtSignal
+from PyQt5.QtGui import QIcon
+import img_qr
 
 
 downfile = 'iLearnBackupTool.exe'
@@ -12,7 +14,6 @@ tempfile = '~$iLearnBackupTool.exe'
 
 
 class UpdaterGUI(QWidget):
-
     class Downloader(QThread):
         gotchunk = pyqtSignal(float)
         finished = pyqtSignal()
@@ -46,12 +47,15 @@ class UpdaterGUI(QWidget):
         self.progressbar = QProgressBar(self)
         self.progresslabel = QLabel(self.progressbar)
         self.initGUI()
+        self.setWindowIcon(QIcon(":img/Main_Icon.png"))
 
         self.downloader = self.Downloader(self.durl)
         self.downloader.gotchunk.connect(self.setProgressValue)
         self.downloader.error.connect(self.errorHandler)
         self.downloader.finished.connect(self.finished)
+        #self.signal_startDownload.connect(self.startDownload)
 
+    def startDownload(self):
         self.show()
         self.downloader.start()
 
@@ -80,11 +84,20 @@ class UpdaterGUI(QWidget):
 
     def finished(self):
         QMessageBox.information(self, '下載完成', '下載成功！', QMessageBox.Ok)
-        os.remove(downfile)
-        os.rename(tempfile, downfile)
+        #os.remove(downfile)
+        #os.rename(tempfile, downfile)
+        with open("rename.bat","w")as f:
+            f.write("@ del iLearnBackupTool.exe\n")
+            f.write("@ rename %s %s\n"%(tempfile,downfile))
+            f.write("@ del rename.bat\n")
+            f.write("@ exit\n")
+        os.system("start rename.bat")
         QCoreApplication.instance().quit()
 
+    def closeWindow(self):
+        QCoreApplication.instance().quit()
 
+"""
 if __name__ == '__main__':
 
     def str2bool(s):
@@ -123,3 +136,4 @@ if __name__ == '__main__':
         subprocess.Popen(downfile)
 
     sys.exit(0)
+"""

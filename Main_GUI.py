@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import QGridLayout, QVBoxLayout, QGroupBox, QHBoxLayout, QT
 from PyQt5.QtWidgets import QDesktopWidget,QWidget,QTableWidgetItem, QTabWidget, QPlainTextEdit, QComboBox
 from PyQt5.QtWidgets import QLabel, QLineEdit, QPushButton, QRadioButton, QCheckBox, QTableWidget,QProgressBar
 from PyQt5.QtGui import QIcon
+from Updater_GUI import UpdaterGUI
 from PyQt5 import QtCore
 from configparser import ConfigParser
 import threadpool
@@ -29,6 +30,7 @@ class myGUI(QMainWindow):
     signal_close = QtCore.pyqtSignal()
     signal_appendDownloadList = QtCore.pyqtSignal(dict)
     signal_processbar_value = QtCore.pyqtSignal(int)
+    signal_startUpdate = QtCore.pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -37,8 +39,7 @@ class myGUI(QMainWindow):
         self.DownloadPool= threadpool.ThreadPool(1)
         self.readSetting()
         string.setLanguage(self.config['User']['language'])
-        self.version = 0.1
-        self.checkUpdate()
+        self.version = 0
         self.host='https://ilearn2.fcu.edu.tw'
         self.statusbar = self.statusBar()
         self.initUI()
@@ -60,6 +61,9 @@ class myGUI(QMainWindow):
         self.signal_processbar_value.connect(self.setProcessBarValue)
         self.signal_startShowTree.connect(self.startShowTree)
         self.signal_setStartBackupBtn.connect(self.setStartBackupBtn)
+        self.timer_checkUpdate = QtCore.QTimer()
+        self.timer_checkUpdate.timeout.connect(self.checkUpdate)
+        self.timer_checkUpdate.start(1000)
         if self.config['dev'].getboolean('autologin')==True:
             self.btn_login.click()
 
@@ -137,14 +141,23 @@ class myGUI(QMainWindow):
                     self.retryTimer.start(1000)
 
     def checkUpdate(self):
+        try:
+            self.timer_checkUpdate.stop()
+        except:
+            pass
         with open('version.ini', mode='w') as f:
             f.write(str(self.version))
         s = requests.Session()
         versionFile = s.get('https://raw.githubusercontent.com/fcu-d0441320/iLearnBackupTool/master/version.ini')
         version = float(versionFile.text)
         if version > self.version:
-            subprocess.Popen('Updater_GUI.exe')
-            sys.exit()
+            if exists('Updater_GUI.exe'):
+                #subprocess.Popen('Updater_GUI.exe')
+                self.signal_startUpdate.emit()
+                pass
+            else:
+                self.signal_startUpdate.emit()
+                #QMessageBox().information(self,"有更新版本!","發現有新版本，請前往官網更新，或檢查是否與Updater_GUI.exe放置於相同資料夾!")
 
     def moveToCenter(self):
         screen = QDesktopWidget().screenGeometry()
@@ -783,14 +796,19 @@ class UserOptionWindow(QWidget):
 if __name__ == '__main__':
 
     app = QApplication(sys.argv)
-    mainGUI = myGUI()
+
     UserOption = UserOptionWindow()
     DevOption = DevOptionWindow()
+    Updater = UpdaterGUI()
+    mainGUI = myGUI()
 
     mainGUI.signal_showUserOptionWindow.connect(UserOption.handle_show)
     mainGUI.signal_close.connect(UserOption.closeWindow)
     mainGUI.signal_showDevOptionWindow.connect(DevOption.handle_show)
     mainGUI.signal_close.connect(DevOption.closeWindow)
+    mainGUI.signal_close.connect(Updater.closeWindow)
+    mainGUI.signal_startUpdate.connect(Updater.startDownload)
     UserOption.signal_restart.connect(mainGUI.restart)
+
 
     sys.exit(app.exec_())
