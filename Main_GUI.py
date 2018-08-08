@@ -54,6 +54,7 @@ class myGUI(QMainWindow):
         self.retryTimes=0
         self.nowLoad = 0
         self.retryAfter = 0
+        self.initCheckUpdate = False
         self.retryTimer = QtCore.QTimer()
         self.retryTimer.timeout.connect(self.startRetry)
         self.signal_loginSuccess.connect(self.ShowResource)
@@ -157,7 +158,10 @@ class myGUI(QMainWindow):
                 self.setVisible(False)
                 self.signal_startUpdate.emit(self.config['User']['language'])
         else:
-            QMessageBox.information(self,string._('This is the latest version'),string._('This is the latest version'))
+            if self.initCheckUpdate==False:
+                self.initCheckUpdate=True
+            else:
+                QMessageBox.information(self,string._('This is the latest version'),string._('This is the latest version'))
                 #QMessageBox().information(self,"有更新版本!","發現有新版本，請前往官網更新，或檢查是否與Updater_GUI.exe放置於相同資料夾!")
 
     def moveToCenter(self):
