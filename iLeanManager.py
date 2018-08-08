@@ -3,26 +3,41 @@ from bs4 import BeautifulSoup
 import FileDownloader
 from PyQt5.QtWidgets import QWidget
 from PyQt5.QtCore import pyqtSignal
-
+import language
+import time
 
 class iLearnManager(QWidget):
     signal_finishDownload = pyqtSignal()
     signal_Log = pyqtSignal(str)
-    signal_FinishGetCourseResource = pyqtSignal(list)
+    signal_setStatusProcessBar=pyqtSignal(int,int)
 
-    def __init__(self, host='http://ilearn2.fcu.edu.tw'):
+    def __init__(self, host='http://ilearn2.fcu.edu.tw',lan='繁體中文'):
         super(iLearnManager,self).__init__()
         self.web = requests.Session()
         self.NID = ""
         self.Pass = ""
         self.courseList = []
         self.host = host
+        self.string = language.string()
+        self.string.setLanguage(lan)
+        self.downloader={"forum/discuss":FileDownloader.discuss(),
+                         "folder/resource":FileDownloader.folderResource(),
+                         "resource":FileDownloader.resource(),
+                         "url":FileDownloader.url(),
+                         "page":FileDownloader.page(),
+                         "assign":FileDownloader.assign(),
+                         "videos":FileDownloader.videos()}
+        for ele in self.downloader:
+            self.downloader[ele].setLanguage(lan)
+            self.downloader[ele].signal_downloadNextFile.connect(self.finishDownload)
+            self.downloader[ele].signal_errorMsg.connect(self.showErrorMsg)
+            self.downloader[ele].signal_setStatusProcessBar.connect(self.setStatusProcessBar)
 
     def print(self,msg):
         self.signal_Log.emit(msg)
 
     def TestConnection(self):
-        self.print('正在測試與iLearn的連線...')
+        self.print(self.string._('Testing connection with iLearn2...'))
         page = self.web.get(self.host+"/login/index.php")
         html = BeautifulSoup(page.text, 'lxml')
         form_login = html.find('form', id='login')
@@ -39,7 +54,7 @@ class iLearnManager(QWidget):
     def Login(self):
         payload = {'username': self.NID, 'password': self.Pass}
         page = self.web.post(self.host+'/login/index.php', data=payload)
-        html = BeautifulSoup(page.text, 'html.parser')
+        html = BeautifulSoup(page.text, 'lxml')
         img_userpicture = html.find('img', {'class':'userpicture'})
         if img_userpicture is not None:
             userName = img_userpicture.get('title').split(' ')[1][:-3]
@@ -49,7 +64,7 @@ class iLearnManager(QWidget):
 
     def getCourseList(self):
         r = self.web.get(self.host)
-        soup = BeautifulSoup(r.text, 'html.parser')
+        soup = BeautifulSoup(r.text, 'lxml')
         div_course = soup.find_all('div', {"style": "font-size:1.1em;font-weight:bold;line-height:20px;"})
         CourseList = [div.a.attrs for div in div_course if 'class' not in div.a.attrs]
         for ele in CourseList:
@@ -58,9 +73,13 @@ class iLearnManager(QWidget):
         self.courseList = CourseList
         return CourseList
 
-    def getCourseMainResourceList(self, classInfo):
+    def getCourseMainResourceList(self, classInfo,showTime):
+        tStart = time.time()
         r = self.web.get(self.host+'/course/view.php?id=' + classInfo['id'])
-        soup = BeautifulSoup(r.text, 'html.parser')
+        tStop = time.time()
+        if showTime:
+            self.print(self.string._('Load page %s  in %.3f sec.')%(classInfo['title'],tStop-tStart))
+        soup = BeautifulSoup(r.text, 'lxml')
         div_main = soup.find_all('ul', {"class": "topics"})[0]
         div_section = div_main.find_all('li',{'role':'region'})
         ResourceList = []
@@ -102,32 +121,41 @@ class iLearnManager(QWidget):
             string = string.replace(ele, ')')
         return string
 
-    def getCourseFileList(self, classInfo):
-        MainResourceList = self.getCourseMainResourceList(classInfo)
+    def getCourseFileList(self, classInfo,useRealFileName,showTime):
+        MainResourceList = self.getCourseMainResourceList(classInfo,showTime)
         FileList=[]
-
         for section in MainResourceList:
             recourceList = []
             for recource in section['mods']:
                 if recource['mod']=='forum':
-                    recource['data']=self.getFileList_forum(recource)
-                    recourceList.append(recource)
-                if recource['mod']=='resource':
-                    recource = self.getFileList_resource(recource)
+                    data =self.getFileList_forum(recource,showTime)
+                    if data!=None:
+                        recource['data']=data
+                        recourceList.append(recource)
+                elif recource['mod']=='resource':
+                    if useRealFileName==True:
+                        recource = self.getFileList_resource(recource,showTime)
                     recourceList.append(recource)
                 elif recource['mod'] in ['url', 'assign', 'page', 'videos']:
                     recourceList.append(recource)
                 elif recource['mod'] == 'folder':
-                    recource['data']=self.getFileList_folder(recource)
-                    recourceList.append(recource)
+                    data=self.getFileList_folder(recource,showTime)
+                    if len(data)!=0:
+                        recource['data'] = data
+                        recourceList.append(recource)
                 else:
-                    self.print('發現不支援的課程模組 '+recource['mod']+' mod: '+recource['name'])
-            FileList.append({'section':section['name'],'mods':recourceList})
+                    self.print(self.string._('Find unsupport mod ')+recource['mod']+' mod: '+recource['name'])
+            if len(recourceList)!=0:
+                FileList.append({'section':section['name'],'mods':recourceList})
         return FileList
 
-    def getFileList_forum(self, info):
+    def getFileList_forum(self, info,showTime):
         FileList = []
+        tStart = time.time()
         r = self.web.get('https://ilearn2.fcu.edu.tw/mod/forum/view.php?id=' + info['mod_id'])
+        tStop = time.time()
+        if showTime:
+            self.print(self.string._('Load discuss page %s  in %.3f sec.') % (info['name'], tStop - tStart))
         soup = BeautifulSoup(r.text, 'lxml')
         folderName = soup.find_all('div',{'role': 'main'})[0].h2.text
         allTopic = soup.find_all('td', {'class': 'topic starter'})
@@ -137,10 +165,17 @@ class iLearnManager(QWidget):
             mod_id = topic.a.get('href').split('d=')[1]
             name = self.removeIllageWord(topic.text)
             FileList.append({'path': path, 'mod': mod, 'mod_id': mod_id, 'name': name})
-        return FileList
+        if len(FileList)==0:
+            return None
+        else:
+            return FileList
 
-    def getFileList_resource(self, info):
+    def getFileList_resource(self, info,showTime):
+        tStart = time.time()
         r = self.web.get('https://ilearn2.fcu.edu.tw/mod/resource/view.php?id=' + info['mod_id'])
+        tStop = time.time()
+        if showTime:
+            self.print(self.string._('Load resource page %s  in %.3f sec.') % (info['name'], tStop - tStart))
         soup = BeautifulSoup(r.text, 'lxml')
         try:
             filename = soup.find('div',{'class':'resourceworkaround'}).a.text
@@ -149,18 +184,38 @@ class iLearnManager(QWidget):
         info['name'] = filename
         return info
 
-    def getFileList_folder(self, info):
-        return []
+    def getFileList_folder(self, info,showTime):
+        tStart = time.time()
+        r = self.web.get('https://ilearn2.fcu.edu.tw/mod/folder/view.php?id=' + info['mod_id'])
+        tStop = time.time()
+        if showTime:
+            self.print(self.string._('Load folder page %s  in %.3f sec.') % (info['name'], tStop - tStart))
+        soup = BeautifulSoup(r.text, 'html.parser')
+        FileList = []
+        try:
+            filetable = soup.find_all('span',{'class':'fp-filename-icon'})
+        except:
+            filetable = []
+        for file in filetable:
+            try:
+               url = file.a.get('href')
+               filename = file.find('span',{'class':'fp-filename'}).text
+               mod='folder/resource'
+               path = info['path']+'/'+info['name']
+               FileList.append({'path': path, 'mod': mod, 'name': filename, 'mod_id': url})
+            except:
+                pass
+        return FileList
 
-    def DownloadFile(self, StatusTable, index, fileInfo):
-        if fileInfo['mod'] == 'forum/discuss':
-            downloader = FileDownloader.discuss()
-        else:
-            downloader = FileDownloader.BasicDownloader()
-        downloader.setInformation(self.web, fileInfo, StatusTable, index)
-        downloader.signal_downloadNextFile.connect(self.finishDownload)
-        downloader.signal_errorMsg.connect(self.showErrorMsg)
-        downloader.download()
+    def DownloadFile(self,index, fileInfo):
+        try:
+            self.downloader[fileInfo['mod']].setInformation(self.web, fileInfo, index,self.host)
+            self.downloader[fileInfo['mod']].download()
+        except Exception as e:
+            self.print('error! '+str(e))
+
+    def setStatusProcessBar(self,idx,value):
+        self.signal_setStatusProcessBar.emit(idx,value)
 
     def finishDownload(self):
         self.signal_finishDownload.emit()

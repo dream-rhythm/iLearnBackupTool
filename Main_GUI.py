@@ -2,26 +2,41 @@ import sys
 import subprocess
 import requests
 import time
-import _thread
 from threading import Thread
 from iLeanManager import iLearnManager
 from functools import partial
+from os.path import exists
+from os import system,makedirs
+import language
 from PyQt5.QtWidgets import QApplication, QMainWindow, QAction, qApp, QMessageBox
 from PyQt5.QtWidgets import QGridLayout, QVBoxLayout, QGroupBox, QHBoxLayout, QTreeWidget, QTreeWidgetItem
-from PyQt5.QtWidgets import QDesktopWidget,QWidget,QTableWidgetItem, QTabWidget, QPlainTextEdit, QAbstractItemView
+from PyQt5.QtWidgets import QDesktopWidget,QWidget,QTableWidgetItem, QTabWidget, QPlainTextEdit, QComboBox
 from PyQt5.QtWidgets import QLabel, QLineEdit, QPushButton, QRadioButton, QCheckBox, QTableWidget,QProgressBar
 from PyQt5.QtGui import QIcon
 from PyQt5 import QtCore
-from multiprocessing.pool import ThreadPool
+from configparser import ConfigParser
+import threadpool
 import img_qr
 
+string = language.string()
 
 class myGUI(QMainWindow):
-    signal_startDownload = QtCore.pyqtSignal()
     signal_loginSuccess = QtCore.pyqtSignal()
+    signal_startShowTree = QtCore.pyqtSignal()
+    signal_setStartBackupBtn = QtCore.pyqtSignal(str,bool)
+    signal_showUserOptionWindow = QtCore.pyqtSignal()
+    signal_showDevOptionWindow = QtCore.pyqtSignal()
+    signal_close = QtCore.pyqtSignal()
+    signal_appendDownloadList = QtCore.pyqtSignal(dict)
+    signal_processbar_value = QtCore.pyqtSignal(int)
 
     def __init__(self):
         super().__init__()
+        self.config = ConfigParser()
+        self.pool = threadpool.ThreadPool(4)
+        self.DownloadPool= threadpool.ThreadPool(1)
+        self.readSetting()
+        string.setLanguage(self.config['User']['language'])
         self.version = 0.1
         self.checkUpdate()
         self.host='https://ilearn2.fcu.edu.tw'
@@ -29,13 +44,60 @@ class myGUI(QMainWindow):
         self.initUI()
         self.web = iLearnManager(self.host)
         self.init_iLearn()
-        self.signal_startDownload.connect(self.startDownload)
+        self.FileTree={}
+        self.fileList=[]
+        self.nowLoad = 0
         self.signal_loginSuccess.connect(self.ShowResource)
+        self.signal_appendDownloadList.connect(self.appendItemToDownloadList)
+        self.signal_processbar_value.connect(self.setProcessBarValue)
+        self.signal_startShowTree.connect(self.startShowTree)
+        self.signal_setStartBackupBtn.connect(self.setStartBackupBtn)
+        if self.config['dev'].getboolean('autologin')==True:
+            self.btn_login.click()
+
+    def closeEvent(self, event):
+        self.signal_close.emit()
+        #time.sleep(0.5)
+        self.close()
+
 
     def init_iLearn(self):
         self.web.signal_finishDownload.connect(self.startDownload)
+        self.web.signal_setStatusProcessBar.connect(self.setStatusProcessBar)
         self.web.signal_Log.connect(self.print)
-        Thread(target=self.TestiLearnConnection())
+        t = Thread(target=self.TestiLearnConnection)
+        t.run()
+
+    def setStartBackupBtn(self,text,enabled):
+        self.btn_StartBackup.setEnabled(enabled)
+        self.btn_StartBackup.setText(text)
+
+    def setStatusProcessBar(self,idx,value):
+        if value==-1:
+            ProcessBar = QProgressBar()
+            self.StatusTable.setCellWidget(idx,3,ProcessBar)
+        elif value==-2:
+            self.StatusTable.removeCellWidget(idx, 3)       # 移除進度條之控件
+            ErrorIcon = QIcon(":img/DownloadFailed.png")    # 開啟下載失敗之圖案
+            item = QTableWidgetItem(ErrorIcon, string._('Download Falied'))  # 新增顯示失敗的元件
+            self.StatusTable.setItem(idx, 3, item)          # 將新元件設定到表格內
+            if idx==len(self.fileList)-1:
+                self.signal_processbar_value(idx+1)
+        elif value==101:
+            self.print(string._('Download file %d finish!')%(idx+1))
+            self.StatusTable.removeCellWidget(idx, 3)
+            OkIcon = QIcon(":img/FinishDownload.png")  # 開啟下載完成之圖案
+            item = QTableWidgetItem(OkIcon, "OK")  # 新增顯示OK的元件
+            self.StatusTable.setItem(idx, 3, item)  # 將新元件設定到表格內
+            if idx==len(self.fileList)-1:
+                self.signal_processbar_value.emit(len(self.fileList))
+                self.signal_setStartBackupBtn.emit(string._('Start Backup'),True)
+        else:
+            ProcessBar = self.StatusTable.cellWidget(idx, 3)
+            if ProcessBar == None:
+                ProcessBar = QProgressBar()
+                self.StatusTable.setCellWidget(idx, 3, ProcessBar)
+            ProcessBar.setValue(value)
 
     def checkUpdate(self):
         with open('version.ini', mode='w') as f:
@@ -54,13 +116,15 @@ class myGUI(QMainWindow):
         (screen.height() - size.height()) / 2)
 
     def initUI(self):
-        self.setFixedSize(800,600)
+        self.resize(800,600)
+        self.setWindowIcon(QIcon(':img/Main_Icon.png'))
         self.moveToCenter()
-        self.setWindowTitle('iLearn備份工具')
-        self.statusbar.showMessage('備份工具啟動中...')
+        self.setWindowTitle(string._('iLearn Backup Tool'))
+        self.statusbar.showMessage(string._('Starting Backup Tool...'))
+        self.createMenu()
         self.statusProcessBar = QProgressBar()
         self.statusProcessBar.setValue(0)
-        self.statusProcessBar.setFormat("就緒...")
+        self.statusProcessBar.setFormat(string._("Ready..."))
         self.statusbar.addPermanentWidget(self.statusProcessBar)
 
         self.grid = QGridLayout()
@@ -74,8 +138,8 @@ class myGUI(QMainWindow):
 
         self.grid.setColumnStretch(0,10)
         self.grid.setColumnStretch(1,20)
-        self.grid.setRowStretch(0, 10)
-        self.grid.setRowStretch(1, 10)
+        self.grid.setRowStretch(0, 6)
+        self.grid.setRowStretch(1, 6)
         self.grid.setRowStretch(2, 10)
         self.web = iLearnManager()
 
@@ -84,13 +148,13 @@ class myGUI(QMainWindow):
     def createStatusTable(self):
         self.StatusTable = QTableWidget()
         self.StatusTable.setColumnCount(4)
-        horizontal_header = ["檔案名稱","儲存路徑", "檔案模組", "下載進度"]
+        horizontal_header = [string._('File name'),string._('Path'),string._('iLearn mod'),string._('Download status')]
         self.StatusTable.setHorizontalHeaderLabels(horizontal_header)
         self.StatusTable.setEditTriggers(QTableWidget.NoEditTriggers)
         self.StatusTable.setColumnWidth(0, 140)
         self.StatusTable.setColumnWidth(1, 120)
         self.StatusTable.setColumnWidth(2, 120)
-        self.StatusTable.setColumnWidth(3, 400)
+        self.StatusTable.setColumnWidth(3, 380)
         return self.StatusTable
 
     def createLogSpace(self):
@@ -103,32 +167,34 @@ class myGUI(QMainWindow):
 
     def createStatusView(self):
         tabs = QTabWidget()
-        tabs.addTab(self.createStatusTable(), "備份狀態")
-        tabs.addTab(self.createLogSpace(), "日誌")
+        tabs.addTab(self.createStatusTable(), string._('Backup status'))
+        tabs.addTab(self.createLogSpace(), string._('Log'))
         return tabs
 
     def createLoginGroup(self):
-        groupBox = QGroupBox("Step 1:登入iLearn")
+        groupBox = QGroupBox(string._('Step 1: Login'))
         form = QGridLayout()
-        label_NID = QLabel("帳號:")
+        label_NID = QLabel(string._('NID:'))
         self.input_NID = QLineEdit()
-        label_Pass = QLabel("密碼:")
+        self.input_NID.setText(self.config['dev']['nid'])
+        label_Pass = QLabel(string._('Password:'))
         self.input_Pass = QLineEdit()
+        self.input_Pass.setText(self.config['dev']['pass'])
         self.input_Pass.setEchoMode(QLineEdit.Password)
         form.addWidget(label_NID, 0, 0)
         form.addWidget(self.input_NID, 0, 1, 1, 2)
         form.addWidget(label_Pass, 1, 0)
         form.addWidget(self.input_Pass, 1, 1, 1, 2)
 
-        self.btn_clean = QPushButton('清除', self)
+        self.btn_clean = QPushButton(string._('Clean'), self)
         self.btn_clean.clicked[bool].connect(self.cleanLogin)
         form.addWidget(self.btn_clean, 2, 1)
 
-        self.btn_login = QPushButton('登入', self)
+        self.btn_login = QPushButton(string._('Login'), self)
         self.btn_login.clicked[bool].connect(self.Login)
         form.addWidget(self.btn_login, 2, 2)
 
-        label_iLearnStatus = QLabel("iLearn狀態:")
+        label_iLearnStatus = QLabel(string._('iLearn status:'))
         form.addWidget(label_iLearnStatus, 3, 0)
 
         self.label_iLearn = QLabel()
@@ -146,28 +212,37 @@ class myGUI(QMainWindow):
         self.input_Pass.setText("")
 
     def createSaveGroup(self):
-        groupBox = QGroupBox("Step 3:選擇儲存類型")
+        groupBox = QGroupBox(string._('Step 3:Select save option'))
 
-        radio1 = QRadioButton("儲存成檔案")
+        radio1 = QRadioButton(string._('Save as file'))
         radio1.setChecked(True)
-        radio2 = QRadioButton("儲存成網頁")
+        radio2 = QRadioButton(string._('Save as web page'))
         radio2.setEnabled(False)
 
-        self.btn_StartBackup = QPushButton('開始備份', self)
+        self.btn_StartBackup = QPushButton(string._('Start Backup'), self)
         self.btn_StartBackup.setEnabled(False)
         self.btn_StartBackup.clicked[bool].connect(self.StartBackup)
+        self.btn_OpenFolder = QPushButton(string._('Open Folder'), self)
+        self.btn_OpenFolder.clicked[bool].connect(self.OpenFolder)
 
         vbox = QVBoxLayout()
         vbox.addWidget(radio1)
         vbox.addWidget(radio2)
         vbox.addWidget(self.btn_StartBackup)
+        vbox.addWidget(self.btn_OpenFolder)
         vbox.addStretch(1)
         groupBox.setLayout(vbox)
 
+        if not exists('iLearn'):
+            makedirs('iLearn')
+
         return groupBox
 
+    def OpenFolder(self):
+        system("explorer iLearn")
+
     def createCourseGroup(self):
-        groupBox = QGroupBox("Step 2:選擇要備份的課程")
+        groupBox = QGroupBox(string._('Step 2:Select sourse resource to backup'))
 
         self.CourseListBox = QVBoxLayout()
         self.CourseListBox.addStretch(1)
@@ -175,8 +250,9 @@ class myGUI(QMainWindow):
         self.CourseTreeList = QTreeWidget()
         self.CourseTreeList.setHeaderHidden(True)
         self.CourseTreeList.setEnabled(False)
+        self.CourseTreeList.itemExpanded.connect(self.ExpandCourse)
         self.CourseTreeListRoot = QTreeWidgetItem(self.CourseTreeList)
-        self.CourseTreeListRoot.setText(0,"所有課程")
+        self.CourseTreeListRoot.setText(0,string._("All course"))
         self.CourseTreeListRoot.setFlags(self.CourseTreeListRoot.flags()|QtCore.Qt.ItemIsTristate|QtCore.Qt.ItemIsUserCheckable)
         self.CourseTreeListRoot.setCheckState(0, QtCore.Qt.Unchecked)
 
@@ -187,41 +263,72 @@ class myGUI(QMainWindow):
 
         return groupBox
 
-    def selectAllAction(self,Check):
-        items = [self.CourseListBox.itemAt(i).widget() for i in range(self.CourseListBox.count())]
-        for idx in range(len(items)):
-            checkbox = items[idx]
-            if isinstance(checkbox, QCheckBox):
-                checkbox.setChecked(Check)
+    def createMenu(self):
+        menubar = self.menuBar()
+
+        fileMenu = menubar.addMenu(string._('File'))
+        closeAct = QAction(QIcon(':img/Close_Icon.png'),string._('Quit'), self)
+        closeAct.triggered.connect(qApp.quit)
+        fileMenu.addAction(closeAct)
+
+        optMenu = menubar.addMenu(string._('Option'))
+        DevOptAct = QAction(QIcon(':img/Settings_Icon.png'),string._('Developer options'),self)
+        DevOptAct.triggered.connect(self.showDevOption)
+        UserOptionAction = QAction(QIcon(':img/Settings_Icon.png'),string._('Preferences'),self)
+        UserOptionAction.triggered.connect(self.showUserOption)
+        optMenu.addAction(UserOptionAction)
+        optMenu.addAction(DevOptAct)
+
+        helpMenu = menubar.addMenu(string._('Help'))
+        helpAct = QAction(QIcon(':img/Help_Icon.png'),string._('Help'), self)
+        helpAct.triggered.connect(self.showHelp)
+        aboutAct = QAction(QIcon(':img/About_Icon.png'),string._('About'), self)
+        aboutAct.triggered.connect(self.showInformation)
+        checkUpdateAct = QAction(QIcon(':img/Update_Icon.png'),string._('Check update'), self)
+        checkUpdateAct.triggered.connect(self.checkUpdate)
+        helpMenu.addAction(helpAct)
+        helpMenu.addAction(checkUpdateAct)
+        helpMenu.addAction(aboutAct)
+
+    def showHelp(self):
+        system("explorer http://github.com/fcu-d0441320/iLearnBackupTool")
+
+    def showUserOption(self):
+        self.signal_showUserOptionWindow.emit()
+
+    def showDevOption(self):
+        #DevOption = DevOptionWindow()
+        #DevOption.handle_show()
+        pass
+        self.signal_showDevOptionWindow.emit()
 
     def Login(self):
-        Thread(target = self.__Login())
+        t = Thread(target = self.__Login)
+        t.run()
 
     def __Login(self):
         self.web.setUser(self.input_NID.text(),self.input_Pass.text())
-        self.label_iLearn.setText('使用者 '+self.input_NID.text()+' 登入中...')
-        self.print('使用者 '+self.input_NID.text()+' 登入中...')
+        self.label_iLearn.setText(string._('User %s is signing in...')%self.input_NID.text())
+        self.print(string._('User %s is signing in...')%self.input_NID.text())
         status, UserName = self.web.Login()
         if status:  # == True
-            self.statusbar.showMessage('登入成功')
-            self.label_iLearn.setText(UserName+' 已成功登入')
-            self.print(UserName+' 已成功登入')
+            self.statusbar.showMessage(string._('Sign in success'))
+            self.label_iLearn.setText(string._('%s sign in sucess')%(UserName))
+            self.print(string._('%s sign in sucess')%(UserName))
             self.input_Pass.setEnabled(False)
             self.input_NID.setEnabled(False)
             self.btn_login.setEnabled(False)
             self.btn_clean.setEnabled(False)
             self.signal_loginSuccess.emit()
         else:
-            self.statusbar.showMessage('登入失敗')
-            self.label_iLearn.setText('登入失敗')
-            self.print(UserName + '登入失敗')
+            self.statusbar.showMessage(string._('Sign in failed'))
+            self.label_iLearn.setText(string._('Sign in failed'))
+            self.print(UserName + string._('Sign in failed'))
+        self.nowLoad = 0
 
     def ShowResource(self):
         self.CourseTreeList.setEnabled(True)
         self.courseList = self.web.getCourseList()
-        #self.statusProcessBar.setMaximum(len(self.courseList))
-        #self.statusProcessBar.setValue(0)
-        #self.statusProcessBar.setFormat('正在獲取課程資源...(%v/' + str(len(self.courseList)) + ')')
 
         for course in self.courseList:
             courseItem = QTreeWidgetItem(self.CourseTreeListRoot)
@@ -230,136 +337,380 @@ class myGUI(QMainWindow):
             courseItem.setText(0,course['title'])
             courseItem.setCheckState(0,QtCore.Qt.Unchecked)
             courseItem.setIcon(0,QIcon(':img/mod.course.jpg'))
-            self.CourseTreeList.itemExpanded.connect(self.ExpandCourse)
 
             child = QTreeWidgetItem(courseItem)
             child.setFlags(courseItem.flags()|QtCore.Qt.ItemIsUserCheckable)
-            child.setText(0,'載入中...')
+            child.setText(0,string._('Loading...'))
             child.setCheckState(0, QtCore.Qt.Unchecked)
-        '''
-        index = 0
-        for course in self.courseList:
-            t = Thread(target=self.ShowFileResource,args=(course,self.CourseTreeListRoot.child(index)))
-            t.run()
-            index += 1
-            self.statusProcessBar.setValue(index)
-        '''
+        self.startBackgroundLoad()
+
     def ExpandCourse(self,courseItem):
-        if courseItem.child(0).text(0)=='載入中...':
+        if courseItem.child(0).text(0)==string._('Loading...'):
             i = 0
             for ele in self.courseList:
-                if ele['title']==courseItem.text(0):
+                if ele['title'] == courseItem.text(0):
                     break
                 else:
                     i += 1
             self.timer = QtCore.QTimer()  # 计时器
-            self.timer.timeout.connect(partial(self.ShowFileResource,i,courseItem))
-            self.timer.start(300)
+            self.timer.timeout.connect(partial(self.appedResourceToTree, i, courseItem))
+            self.timer.start(10)
 
-    def ShowFileResource(self,i,courseItem):
-        t = Thread(target=self.__ShowFileResource, args=(self.courseList[i], courseItem))
-        t.run()
-        self.timer.stop()
+    def startBackgroundLoad(self):
+        if self.nowLoad<len(self.courseList):
+            self.statusProcessBar.setMaximum(len(self.courseList))
+            self.statusProcessBar.setFormat(string._('Loding course resource')+'(%v/'+'%d)'%(len(self.courseList)))
 
-    def __ShowFileResource(self,course,courseItem):
-        courseFileList = self.web.getCourseFileList(course)
+            reqs = threadpool.makeRequests(self.loadFileTreeBackground, range(len(self.courseList)))
+            for req in reqs:
+                self.pool.putRequest(req)
+
+    def setProcessBarValue(self,value):
+        if value ==self.statusProcessBar.maximum():
+            self.statusProcessBar.setFormat(string._('Ready...'))
+            self.statusProcessBar.setMaximum(100)
+            self.statusProcessBar.setValue(0)
+        else:
+            self.statusProcessBar.setValue(value)
+
+    def startShowTree(self):
+        for i, courseItem in [(i, self.CourseTreeListRoot.child(i)) for i in
+                              range(self.CourseTreeListRoot.childCount())]:
+            if courseItem.child(0).text(0) == string._('Loading...'):
+                self.appedResourceToTree(i, courseItem)
+
+    def loadFileTreeBackground(self,index):
+        self.signal_processbar_value.emit(index)
+        if self.courseList[index]['title'] not in self.FileTree:
+            FileList = self.web.getCourseFileList(self.courseList[index]
+                                                  ,useRealFileName=self.config['User'].getboolean('userealfilename')
+                                                  ,showTime=self.config['dev'].getboolean('showloadtime'))
+            if self.courseList[index]['title'] not in self.FileTree:
+                self.FileTree[self.courseList[index]['title']] = FileList
+        if index == len(self.courseList)-1:
+            self.signal_processbar_value.emit(len(self.courseList))
+            self.signal_setStartBackupBtn.emit(string._('Start Backup'),True)
+            self.signal_startShowTree.emit()
+
+    def appedResourceToTree(self,i,courseItem):
+        course = self.courseList[i]
+        try:
+            self.timer.stop()
+        except:
+            pass
+        tStart = time.time()
+        if course['title'] not in self.FileTree:
+            courseFileList = self.web.getCourseFileList(course,useRealFileName=self.config['User'].getboolean('userealfilename')
+                                                  ,showTime=self.config['dev'].getboolean('showloadtime'))
+            if course['title'] not in self.FileTree:
+                self.FileTree[course['title']] = courseFileList
+                self.nowLoad += 1
+        else:
+            courseFileList = self.FileTree[course['title']]
+        checkStatus = courseItem.checkState(0)
+        totalFiles = 0
+        if len(courseFileList)==0:
+            sectionItem = QTreeWidgetItem(courseItem)
+            sectionItem.setFlags(sectionItem.flags() |QtCore.Qt.ItemIsTristate|QtCore.Qt.ItemIsUserCheckable)
+            sectionItem.setText(0, string._('There has no resource to download.'))
+            sectionItem.setCheckState(0, checkStatus)
         for section in courseFileList:
             sectionItem = QTreeWidgetItem(courseItem)
-            sectionItem.setFlags(sectionItem.flags() | QtCore.Qt.ItemIsUserCheckable)
+            sectionItem.setFlags(sectionItem.flags() |QtCore.Qt.ItemIsTristate|QtCore.Qt.ItemIsUserCheckable)
             sectionItem.setText(0, section['section'])
-            sectionItem.setCheckState(0, QtCore.Qt.Unchecked)
+            sectionItem.setCheckState(0, checkStatus)
             sectionItem.setIcon(0,QIcon(":img/mod.folder.svg"))
             for recource in section['mods']:
                 if recource['mod'] == 'forum':
                     forumItem = QTreeWidgetItem(sectionItem)
-                    forumItem.setFlags(forumItem.flags() | QtCore.Qt.ItemIsUserCheckable)
+                    forumItem.setFlags(forumItem.flags() |QtCore.Qt.ItemIsTristate|QtCore.Qt.ItemIsUserCheckable)
                     forumItem.setText(0, recource['name'])
-                    forumItem.setCheckState(0, QtCore.Qt.Unchecked)
+                    forumItem.setCheckState(0, checkStatus)
                     forumItem.setIcon(0,QIcon(":img/mod.discuss.svg"))
                     for topic in recource['data']:
                         topicItem = QTreeWidgetItem(forumItem)
-                        topicItem.setFlags(topicItem.flags() | QtCore.Qt.ItemIsUserCheckable)
+                        topicItem.setFlags(topicItem.flags() |QtCore.Qt.ItemIsTristate|QtCore.Qt.ItemIsUserCheckable)
                         topicItem.setText(0, topic['name'])
-                        topicItem.setCheckState(0, QtCore.Qt.Unchecked)
+                        topicItem.setCheckState(0,checkStatus)
                         topicItem.setIcon(0,QIcon(":img/mod.discuss.svg"))
+                        totalFiles += 1
                 elif recource['mod'] in ['url', 'resource', 'assign', 'page', 'videos']:
                     recourceItem = QTreeWidgetItem(sectionItem)
-                    recourceItem.setFlags(recourceItem.flags() | QtCore.Qt.ItemIsUserCheckable)
+                    recourceItem.setFlags(recourceItem.flags() |QtCore.Qt.ItemIsTristate|QtCore.Qt.ItemIsUserCheckable)
                     recourceItem.setText(0, recource['name'])
-                    recourceItem.setCheckState(0, QtCore.Qt.Unchecked)
+                    recourceItem.setCheckState(0, checkStatus)
                     recourceItem.setIcon(0,QIcon(":img/mod."+recource['mod']+".svg"))
+                    totalFiles += 1
                 elif recource['mod'] == 'folder':
-                    pass
+                    folderItem = QTreeWidgetItem(sectionItem)
+                    folderItem.setFlags(folderItem.flags() |QtCore.Qt.ItemIsTristate|QtCore.Qt.ItemIsUserCheckable)
+                    folderItem.setText(0, recource['name'])
+                    folderItem.setCheckState(0, checkStatus)
+                    folderItem.setIcon(0, QIcon(":img/mod.folder.svg"))
+                    for file in recource['data']:
+                        fileItem = QTreeWidgetItem(folderItem)
+                        fileItem.setFlags(fileItem.flags() |QtCore.Qt.ItemIsTristate|QtCore.Qt.ItemIsUserCheckable)
+                        fileItem.setText(0, file['name'])
+                        fileItem.setCheckState(0, checkStatus)
+                        fileItem.setIcon(0, QIcon(":img/mod.resource.svg"))
+                        totalFiles += 1
         courseItem.removeChild(courseItem.child(0))
+        tStop = time.time()
+        if self.config['dev'].getboolean('showloadtime'):
+            self.print(string._('Load course %s in %.3f sec, total has %d resource(s)')%(courseItem.text(0),tStop-tStart,totalFiles))
 
     def showFileList(self):
-        backupList = []
-        items = [self.CourseListBox.itemAt(i).widget() for i in range(self.CourseListBox.count())]
-        for idx in range(len(items)):
-            checkbox = items[idx]
-            if isinstance(checkbox, QCheckBox):
-                for ele in self.courseList:
-                    if ele['title'] == checkbox.text():
-                        course = ele
-                        break
-                if checkbox.isChecked():
-                    backupList.append(course)
-        self.fileList = []
-        i = 1
-        for course in backupList:
-            coursefile = self.web.getCourseFileList(course)
-            self.btn_StartBackup.setText('正在獲取檔案清單中,請稍後...('+str(i)+'/'+str(len(backupList))+')')
-            i+=1
-            self.fileList.extend(coursefile)
-            for ele in coursefile:
-                row_count = self.StatusTable.rowCount()
-                self.StatusTable.insertRow(row_count)
-                self.StatusTable.setItem(row_count, 0, QTableWidgetItem(ele['name']))
-                self.StatusTable.setItem(row_count, 1, QTableWidgetItem(ele['path']))
-                self.StatusTable.setItem(row_count, 2, QTableWidgetItem(ele['mod']))
-                self.StatusTable.setItem(row_count, 3, QTableWidgetItem('等待中...'))
-        self.nowDownload = 0
-        self.signal_startDownload.emit()
+        self.btn_StartBackup.setEnabled(False)
+        courseIndex = 0
+        for courseItem in [self.CourseTreeListRoot.child(i) for i in range(self.CourseTreeListRoot.childCount())]:
+            courseIndex += 1
+            self.signal_processbar_value.emit(courseIndex)
+            courseData = self.FileTree[courseItem.text(0)]
+            if courseItem.checkState(0)!=QtCore.Qt.Unchecked:
+                for sectionItem in [courseItem.child(i) for i in range(courseItem.childCount())]:
+                    sectionItemName = sectionItem.text(0)
+                    if sectionItemName==string._('There has no resource to download.'):
+                        continue
+                    sectionData = [courseData[i] for i in range(len(courseData)) if courseData[i]['section']==sectionItemName][0]
+                    if sectionItem.checkState(0)!=QtCore.Qt.Unchecked:
+                        for modItem in [sectionItem.child(i)for i in range(sectionItem.childCount())]:
+                            modItemName = modItem.text(0)
+                            modData = [sectionData['mods'][i] for i in range(len(sectionData['mods'])) if sectionData['mods'][i]['name']==modItemName][0]
+                            if modItem.checkState(0)!=QtCore.Qt.Unchecked:
+                                if modData['mod']=='forum':
+                                    for topicItem in [modItem.child(i) for i in range(modItem.childCount())]:
+                                        if topicItem.checkState(0)==QtCore.Qt.Checked:
+                                            topicName = topicItem.text(0)
+                                            resource = [modData['data'][i]for i in range(len(modData['data'])) if modData['data'][i]['name']==topicName][0]
+                                            self.signal_appendDownloadList.emit(resource)
+                                elif  modData['mod']in ['resource','url', 'assign', 'page', 'videos']:
+                                    if modItem.checkState(0)==QtCore.Qt.Checked:
+                                        self.signal_appendDownloadList.emit(modData)
+                                elif modData['mod']=='folder':
+                                    for fileItem in [modItem.child(i)for i in range(modItem.childCount())]:
+                                        if fileItem.checkState(0)==QtCore.Qt.Checked:
+                                            fileName = fileItem.text(0)
+                                            resource = [modData['data'][i] for i in range(len(modData['data'])) if  modData['data'][i]['name'] == fileName][0]
+                                            self.signal_appendDownloadList.emit(resource)
+        time.sleep(0.5)
+        reqs = threadpool.makeRequests(self.startDownload, range(len(self.fileList)))
+        for req in reqs:
+            self.DownloadPool.putRequest(req)
+        if len(self.fileList) == 0:
+            self.btn_StartBackup.setEnabled(True)
+        else:
+            self.statusProcessBar.setFormat(string._('Downloading...')+"(%v/" + "%d)" % len(self.fileList))
+            self.statusProcessBar.setMaximum(len(self.fileList))
 
-    def startDownload(self):
-        if self.nowDownload < len(self.fileList):
-            self.web.DownloadFile(self.StatusTable,self.nowDownload,self.fileList[self.nowDownload])
-            self.nowDownload += 1
-            self.btn_StartBackup.setText('正在下載...('+str(self.nowDownload)+'/'+str(len(self.fileList))+')')
-            self.print('nowDownload='+str(self.nowDownload))
+    def appendItemToDownloadList(self,Item):
+        self.fileList.append(Item)
+        mod = Item['mod']
+        if  '/' in mod:
+            mod = mod.split('/')[1]
+        row_count = self.StatusTable.rowCount()
+        self.StatusTable.insertRow(row_count)
+        self.StatusTable.setItem(row_count, 0, QTableWidgetItem(Item['name']))
+        self.StatusTable.setItem(row_count, 1, QTableWidgetItem(Item['path']))
+        self.StatusTable.setItem(row_count, 2, QTableWidgetItem(QIcon(':img/mod.%s.svg'%mod),Item['mod']))
+        self.StatusTable.setItem(row_count, 3, QTableWidgetItem('等待中...'))
+
+    def startDownload(self,idx):
+        if idx < len(self.fileList):
+            self.btn_StartBackup.setText(string._('Downloading...(%d/%d)')%(idx,len(self.fileList)))
+            self.signal_processbar_value.emit(idx)
+            self.print(string._('Start to download %dth file')%(idx+1))
+            self.web.DownloadFile(idx, self.fileList[idx])
+            time.sleep(0.5)
 
     def StartBackup(self):
-        if self.NumOfSelect == 0:
-            self.btn_StartBackup.setText('請先選擇課程再按開始備份!')
-        else:
-            self.btn_selectAll.setEnabled(False)
-            self.btn_selectNone.setEnabled(False)
-            self.btn_StartBackup.setText('正在獲取檔案清單中,請稍後...')
-            self.btn_StartBackup.setEnabled(False)
-            items = [self.CourseListBox.itemAt(i).widget() for i in range(self.CourseListBox.count())]
-            for idx in range(len(items)):
-                checkbox = items[idx]
-                if isinstance(checkbox, QCheckBox):
-                    checkbox.setEnabled(False)
-            _thread.start_new_thread(self.showFileList, ())
+        self.fileList=[]
+        self.StatusTable.setRowCount(0)
+        self.statusProcessBar.setFormat(string._('Loading file list')+"(%v" +"/%d)" % self.CourseTreeListRoot.childCount())
+        self.statusProcessBar.setMaximum(self.CourseTreeListRoot.childCount())
+        self.showFileList()
 
     def showInformation(self):
-        QMessageBox.about(self, '關於', 'iLearn備份工具\n工具版本：'+str(self.version))
+        QMessageBox.about(self, string._('About'), string._('tool Information')%self.version)
 
     def TestiLearnConnection(self):
-        self.statusbar.showMessage('正在測試iLearn2的連線...')
-        self.label_iLearn.setText('連線中...')
+        self.statusbar.showMessage(string._('Testing connection with iLearn2...'))
+        self.label_iLearn.setText(string._('Connecting...'))
         if self.web.TestConnection():   # ==Ture
-            self.statusbar.showMessage('iLearn2連線成功!')
-            self.label_iLearn.setText('連線成功!')
+            self.statusbar.showMessage(string._('Connect to iLearn2 success!'))
+            self.label_iLearn.setText(string._('Connect success!'))
         else:
-            self.statusbar.showMessage('iLearn2連線失敗!')
-            self.label_iLearn.setText('連線失敗!')
+            self.statusbar.showMessage(string._('Can not connect to iLearn2!'))
+            self.label_iLearn.setText(string._('Connect failed!'))
 
+    def readSetting(self):
+        if exists('setting.ini'):
+            self.config.read('setting.ini',encoding='utf-8')
+        else:
+            self.config['User']={}
+            self.config['User']['userealfilename']='False'
+            self.config['User']['language'] = '繁體中文'
+            self.config['dev']={}
+            self.config['dev']['nid']=''
+            self.config['dev']['pass']=''
+            self.config['dev']['autologin']='False'
+            self.config['dev']['showloadtime']='False'
+            with open('setting.ini','w',encoding='utf-8') as configfile:
+                self.config.write(configfile)
+
+class DevOptionWindow(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowIcon(QIcon(':img/Settings_Icon.png'))
+        self.resize(300, 200)
+        self.setWindowTitle(string._('Developer options'))
+        self.vbox = QVBoxLayout()
+
+        hbox_nid = QHBoxLayout()
+        hbox_nid.addWidget(QLabel(string._('NID:')))
+        self.inp_nid = QLineEdit()
+        hbox_nid.addWidget(self.inp_nid)
+        self.vbox.addLayout(hbox_nid)
+
+        hbox_pass = QHBoxLayout()
+        hbox_pass.addWidget(QLabel(string._('Password:')))
+        self.inp_pass = QLineEdit()
+        self.inp_pass.setEchoMode(QLineEdit.Password)
+        hbox_pass.addWidget(self.inp_pass)
+        self.vbox.addLayout(hbox_pass)
+
+        self.autoLogin = QCheckBox(string._('Auto login'))
+        self.vbox.addWidget(self.autoLogin)
+        self.showTime = QCheckBox(string._('Show load time'))
+        self.vbox.addWidget(self.showTime)
+        btn_saveButton = QPushButton('Save')
+        btn_saveButton.clicked[bool].connect(self.write)
+        hbox2 = QHBoxLayout()
+        hbox2.addStretch(1)
+        hbox2.addWidget(btn_saveButton)
+        hbox2.addStretch(1)
+
+        self.vbox.addLayout(hbox2)
+        self.setLayout(self.vbox)
+        self.config = ConfigParser()
+
+
+    def handle_show(self):
+        if self.isVisible()==False:
+            self.readSetting()
+            self.show()
+
+    def readSetting(self):
+        if exists('setting.ini'):
+            self.config.read('setting.ini',encoding='utf-8')
+        else:
+            self.config['User']={}
+            self.config['User']['userealfilename']='False'
+            self.config['User']['language'] = '繁體中文'
+            self.config['dev']={}
+            self.config['dev']['nid']=''
+            self.config['dev']['pass']=''
+            self.config['dev']['autologin']='False'
+            self.config['dev']['showloadtime']='False'
+            with open('setting.ini','w',encoding='utf-8') as configfile:
+                self.config.write(configfile)
+        self.inp_nid.setText(self.config['dev']['nid'])
+        self.inp_pass.setText(self.config['dev']['pass'])
+        self.autoLogin.setChecked(self.config['dev'].getboolean('autologin'))
+        self.showTime.setChecked(self.config['dev'].getboolean('showloadtime'))
+
+    def write(self):
+        self.config['dev']['nid'] = self.inp_nid.text()
+        self.config['dev']['pass'] = self.inp_pass.text()
+        self.config['dev']['autologin'] = str(self.autoLogin.isChecked())
+        self.config['dev']['showloadtime'] = str(self.showTime.isChecked())
+        with open('setting.ini', 'w',encoding='utf-8') as configfile:
+            self.config.write(configfile)
+        self.close()
+
+    def closeWindow(self):
+        self.close()
+
+class UserOptionWindow(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowIcon(QIcon(':img/Settings_Icon.png'))
+        self.config = ConfigParser()
+        self.resize(300, 200)
+        self.setWindowTitle(string._('Preferences'))
+        self.vbox = QVBoxLayout()
+        hbox = QHBoxLayout()
+        self.combo = QComboBox()
+        self.combo.addItem("繁體中文")
+        self.combo.addItem("English")
+        self.combo.activated[str].connect(self.setLanguage)
+        hbox.addWidget(QLabel(string._('Language')))
+        hbox.addWidget(self.combo)
+        self.vbox.addLayout(hbox)
+        self.useRealFileName = QCheckBox(string._('Show original file name in recource list.'))
+        vbox = QVBoxLayout()
+        vbox.addWidget(self.useRealFileName)
+        vbox.addWidget(QLabel(string._('      *This setting will cause load resouce very slow,\n       please be careful.')))
+        self.vbox.addLayout(vbox)
+        self.vbox.addWidget(QLabel(string._('New setting will be use on restart.')))
+        btn_saveButton = QPushButton('Save')
+        btn_saveButton.clicked[bool].connect(self.write)
+        hbox2 = QHBoxLayout()
+        hbox2.addStretch(1)
+        hbox2.addWidget(btn_saveButton)
+        hbox2.addStretch(1)
+
+        self.vbox.addLayout(hbox2)
+        self.vbox.addStretch(1)
+        self.setLayout(self.vbox)
+
+
+    def handle_show(self):
+        if self.isVisible()==False:
+            self.readSetting()
+            self.show()
+
+    def readSetting(self):
+        if exists('setting.ini'):
+            self.config.read('setting.ini',encoding='utf-8')
+        else:
+            self.config['User']={}
+            self.config['User']['userealfilename']='False'
+            self.config['User']['language']='繁體中文'
+            self.config['dev']={}
+            self.config['dev']['nid']=''
+            self.config['dev']['pass']=''
+            self.config['dev']['autologin']='False'
+            self.config['dev']['showloadtime']='False'
+            with open('setting.ini','w',encoding='utf-8') as configfile:
+                self.config.write(configfile)
+        index = self.combo.findText(self.config['User']['language'], QtCore.Qt.MatchFixedString)
+        if index >= 0:
+            self.combo.setCurrentIndex(index)
+        self.useRealFileName.setChecked(self.config['User'].getboolean('userealfilename'))
+
+    def setLanguage(self,lan):
+        self.config['User']['language']=lan
+
+    def write(self):
+        self.config['User']['userealfilename'] = str(self.useRealFileName.isChecked())
+        with open('setting.ini', 'w',encoding='utf-8') as configfile:
+            self.config.write(configfile)
+        self.close()
+
+    def closeWindow(self):
+        self.close()
 
 if __name__ == '__main__':
 
     app = QApplication(sys.argv)
     mainGUI = myGUI()
+    UserOption = UserOptionWindow()
+    DevOption = DevOptionWindow()
+
+    mainGUI.signal_showUserOptionWindow.connect(UserOption.handle_show)
+    #mainGUI.close.connect(UserOption.closeWindow)
+    mainGUI.signal_close.connect(UserOption.closeWindow)
+    mainGUI.signal_showDevOptionWindow.connect(DevOption.handle_show)
+    mainGUI.signal_close.connect(DevOption.closeWindow)
 
     sys.exit(app.exec_())

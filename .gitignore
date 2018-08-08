@@ -1,5 +1,10 @@
 venv/
 .idea/
 __pycache__
+build/
 iLearn/
 CC2FinalExam.zip
+setting.ini
+img.qrc
+~$iLearnBackupTool.exe
+iLearnBackupTool.zip
