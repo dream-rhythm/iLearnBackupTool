@@ -225,4 +225,3 @@ class videos(BasicDownloader):
             self.downloadWithRealUrl(video,filename)
         except Exception as e:
             self.signal_errorMsg.emit(self.string._('There has some exception when download %s/%s, so download failed...\nException:') % (self.path, self.Fileinfo['name']) + str(e))
-        

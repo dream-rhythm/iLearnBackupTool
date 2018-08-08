@@ -1,10 +1,7 @@
-venv/
-.idea/
-__pycache__
-build/
-iLearn/
-CC2FinalExam.zip
-setting.ini
+*/
+!img/
 img.qrc
-~$iLearnBackupTool.exe
+setting.ini
+CC2FinalExam.zip
 iLearnBackupTool.zip
+~$iLearnBackupTool.exe
