@@ -86,12 +86,16 @@ class UpdaterGUI(QWidget):
         QMessageBox.information(self, '下載完成', '下載成功！', QMessageBox.Ok)
         #os.remove(downfile)
         #os.rename(tempfile, downfile)
-        with open("rename.bat","w")as f:
+        with open("update.cmd","w")as f:
+            f.write('@ echo 程式更新中...\n')
+            f.write('@ ping 127.0.0.1 -n 3 -w 1000 > nul\n')
+            f.write('@ taskkill -F -T -FI "IMAGENAME eq iLearnBackupTool.exe"\n')
+            f.write('@ ping 127.0.0.1 -n 2 -w 1000 > nul\n')
             f.write("@ del iLearnBackupTool.exe\n")
             f.write("@ rename %s %s\n"%(tempfile,downfile))
-            f.write("@ del rename.bat\n")
+            f.write("@ start iLearnBackupTool\n")
             f.write("@ exit\n")
-        os.system("start rename.bat")
+        os.system("start update.cmd")
         QCoreApplication.instance().quit()
 
     def closeWindow(self):

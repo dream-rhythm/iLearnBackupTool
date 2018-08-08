@@ -151,12 +151,13 @@ class myGUI(QMainWindow):
         versionFile = s.get('https://raw.githubusercontent.com/fcu-d0441320/iLearnBackupTool/master/version.ini')
         version = float(versionFile.text)
         if version > self.version:
-            if exists('Updater_GUI.exe'):
-                #subprocess.Popen('Updater_GUI.exe')
+            reply = QMessageBox.question(self, string._('Find New version'), string._('Find New Version:%.1d\nNow Vsrsion:%.1f\nDo you want to update?')%(version,self.version),
+                                         QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if reply== QMessageBox.Yes:
+                self.setVisible(False)
                 self.signal_startUpdate.emit()
-                pass
-            else:
-                self.signal_startUpdate.emit()
+        else:
+            QMessageBox.information(self,string._('This is the latest version'),string._('This is the latest version'))
                 #QMessageBox().information(self,"有更新版本!","發現有新版本，請前往官網更新，或檢查是否與Updater_GUI.exe放置於相同資料夾!")
 
     def moveToCenter(self):
