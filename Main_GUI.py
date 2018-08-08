@@ -590,7 +590,12 @@ class myGUI(QMainWindow):
         if idx < len(self.fileList):
             self.btn_StartBackup.setText(string._('Downloading...(%d/%d)')%(idx,len(self.fileList)))
             if self.retryTimes != 0:
-                self.btn_StartBackup.setText(string._('Downloading...(%d/%d)') % (idx, len(self.retryList)))
+                indexInRetryList=0
+                for ele in self.retryList:
+                    indexInRetryList+=1
+                    if ele==idx:
+                        break
+                self.btn_StartBackup.setText(string._('Downloading...(%d/%d)') % (indexInRetryList, len(self.retryList)))
             self.signal_processbar_value.emit(idx)
             self.print(string._('Start to download %dth file')%(idx+1))
             self.web.DownloadFile(idx, self.fileList[idx])
