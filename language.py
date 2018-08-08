@@ -66,7 +66,13 @@ class string:
                               'Open Folder':'開啟下載資料夾',
                               'Save and Restart':'儲存並重新啟動',
                               "Success:%d\nFailed:%d":"成功:%d\n失敗:%d",
-                              "Download finish!":"下載完成!"
+                              "Download finish!":"下載完成!",
+                              "General setting":"一般設定",
+                              "Retry setting":"重試設定",
+                              'Retry times:':'重試次數:',
+                              'Second between retry:':'重試間隔(秒):',
+                              "Speed: ":"下載速度: ",
+                              'Download will retry after %d sec.':'將在 %d 秒後進行重試'
                      }
         self.English_Strings={'tool Information':'iLearn Backup Tool\nTool version：%.1f\nDeveloper:夢o旋律(陳琮斌),Aimerfan(簡瑞梓)'}
         self.LANGUAGE = '繁體中文'

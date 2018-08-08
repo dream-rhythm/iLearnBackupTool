@@ -48,7 +48,13 @@ class myGUI(QMainWindow):
         self.success = 0
         self.failed = 0
         self.fileList=[]
+        self.retryList=[]
+        self.failedList=[]
+        self.retryTimes=0
         self.nowLoad = 0
+        self.retryAfter = 0
+        self.retryTimer = QtCore.QTimer()
+        self.retryTimer.timeout.connect(self.startRetry)
         self.signal_loginSuccess.connect(self.ShowResource)
         self.signal_appendDownloadList.connect(self.appendItemToDownloadList)
         self.signal_processbar_value.connect(self.setProcessBarValue)
@@ -61,11 +67,14 @@ class myGUI(QMainWindow):
         self.signal_close.emit()
         self.close()
 
+    def setStatusBarText(self,str):
+        self.statusbar.showMessage(str)
 
     def init_iLearn(self):
         self.web.signal_finishDownload.connect(self.startDownload)
         self.web.signal_setStatusProcessBar.connect(self.setStatusProcessBar)
         self.web.signal_Log.connect(self.print)
+        self.web.signal_setStatusBarText.connect(self.setStatusBarText)
         t = Thread(target=self.TestiLearnConnection)
         t.run()
 
@@ -78,30 +87,54 @@ class myGUI(QMainWindow):
             ProcessBar = QProgressBar()
             self.StatusTable.setCellWidget(idx,3,ProcessBar)
         elif value==-2:
-            self.failed +=1
+            if self.retryTimes==0:
+                self.failed +=1
+            self.failedList.append(idx)
             self.StatusTable.removeCellWidget(idx, 3)       # 移除進度條之控件
             ErrorIcon = QIcon(":img/DownloadFailed.png")    # 開啟下載失敗之圖案
             item = QTableWidgetItem(ErrorIcon, string._('Download Falied'))  # 新增顯示失敗的元件
             self.StatusTable.setItem(idx, 3, item)          # 將新元件設定到表格內
             if idx==len(self.fileList)-1:
-                self.signal_processbar_value(idx+1)
+                self.signal_processbar_value.emit(idx+1)
+            self.finishDownloadCheck(idx)
         elif value==101:
+            if self.retryTimes!=0:
+                self.failed -=1
             self.success +=1
             self.print(string._('Download file %d finish!')%(idx+1))
             self.StatusTable.removeCellWidget(idx, 3)
             OkIcon = QIcon(":img/FinishDownload.png")  # 開啟下載完成之圖案
             item = QTableWidgetItem(OkIcon, "OK")  # 新增顯示OK的元件
             self.StatusTable.setItem(idx, 3, item)  # 將新元件設定到表格內
-            if idx==len(self.fileList)-1:
-                self.signal_processbar_value.emit(len(self.fileList))
-                self.signal_setStartBackupBtn.emit(string._('Start Backup'),True)
-                QMessageBox.information(self,string._("Download finish!"),string._("Success:%d\nFailed:%d")%(self.success,self.failed))
+            self.finishDownloadCheck(idx)
         else:
             ProcessBar = self.StatusTable.cellWidget(idx, 3)
             if ProcessBar == None:
                 ProcessBar = QProgressBar()
                 self.StatusTable.setCellWidget(idx, 3, ProcessBar)
             ProcessBar.setValue(value)
+
+    def finishDownloadCheck(self,idx):
+        def checkIsEndElement(idx):
+            if self.retryTimes==0:
+                return idx==len(self.fileList)-1
+            else:
+                return idx==self.retryList[-1]
+        def backupFinish():
+            self.signal_processbar_value.emit(self.statusProcessBar.maximum())
+            self.signal_setStartBackupBtn.emit(string._('Start Backup'), True)
+            QMessageBox.information(self, string._("Download finish!"),
+                                    string._("Success:%d\nFailed:%d") % (self.success, self.failed))
+        if checkIsEndElement(idx):
+            if self.retryTimes==self.config['User'].getint('retrytimes'):
+                backupFinish()
+            else:
+                self.signal_processbar_value.emit(self.statusProcessBar.maximum())
+                if self.failed==0:
+                    backupFinish()
+                else:
+                    self.retryAfter = self.config['User'].getint('secondbetweenretry')
+                    self.retryTimer.start(1000)
 
     def checkUpdate(self):
         with open('version.ini', mode='w') as f:
@@ -493,17 +526,35 @@ class myGUI(QMainWindow):
                                             fileName = fileItem.text(0)
                                             resource = [modData['data'][i] for i in range(len(modData['data'])) if  modData['data'][i]['name'] == fileName][0]
                                             self.signal_appendDownloadList.emit(resource)
+        self.retryTimes = 0
+        self.failedList=[]
+        self.retryList=[]
+        self.success = 0
+        self.failed = 0
         time.sleep(0.5)
         reqs = threadpool.makeRequests(self.startDownload, range(len(self.fileList)))
         for req in reqs:
             self.DownloadPool.putRequest(req)
-        self.success =  0
-        self.failed = 0
         if len(self.fileList) == 0:
             self.btn_StartBackup.setEnabled(True)
         else:
             self.statusProcessBar.setFormat(string._('Downloading...')+"(%v/" + "%d)" % len(self.fileList))
             self.statusProcessBar.setMaximum(len(self.fileList))
+
+    def startRetry(self):
+        if self.retryAfter==0:
+            self.retryTimes+=1
+            self.retryTimer.stop()
+            self.retryList = self.failedList
+            self.failedList=[]
+            reqs = threadpool.makeRequests(self.startDownload, self.retryList)
+            for req in reqs:
+                self.DownloadPool.putRequest(req)
+            self.statusProcessBar.setFormat(string._('Downloading...') + "(%v/" + "%d)" % len(self.retryList))
+            self.statusProcessBar.setMaximum(len(self.retryList))
+        else:
+            self.retryAfter-=1
+            self.signal_setStartBackupBtn.emit(string._('Download will retry after %d sec.') % self.retryAfter, False)
 
     def appendItemToDownloadList(self,Item):
         self.fileList.append(Item)
@@ -520,6 +571,8 @@ class myGUI(QMainWindow):
     def startDownload(self,idx):
         if idx < len(self.fileList):
             self.btn_StartBackup.setText(string._('Downloading...(%d/%d)')%(idx,len(self.fileList)))
+            if self.retryTimes != 0:
+                self.btn_StartBackup.setText(string._('Downloading...(%d/%d)') % (idx, len(self.retryList)))
             self.signal_processbar_value.emit(idx)
             self.print(string._('Start to download %dth file')%(idx+1))
             self.web.DownloadFile(idx, self.fileList[idx])
@@ -546,9 +599,16 @@ class myGUI(QMainWindow):
             self.label_iLearn.setText(string._('Connect failed!'))
 
     def readSetting(self):
-        if exists('setting.ini'):
+        try:
             self.config.read('setting.ini',encoding='utf-8')
-        else:
+            OPTION = self.config.get('User', 'userealfilename')
+            OPTION = self.config.get('User', 'language')
+            OPTION = self.config.get('User', 'retrytimes')
+            OPTION = self.config.get('User', 'secondbetweenretry')
+            OPTION = self.config.get('dev', 'nid')
+            OPTION = self.config.get('dev', 'pass')
+            OPTION = self.config.get('dev', 'showloadtime')
+        except:
             self.config['User']={}
             self.config['User']['userealfilename']='False'
             self.config['User']['language'] = '繁體中文'
@@ -557,8 +617,11 @@ class myGUI(QMainWindow):
             self.config['dev']['pass']=''
             self.config['dev']['autologin']='False'
             self.config['dev']['showloadtime']='False'
+            self.config['User']['retrytimes'] = '3'
+            self.config['User']['secondbetweenretry'] = '5'
             with open('setting.ini','w',encoding='utf-8') as configfile:
                 self.config.write(configfile)
+
     def restart(self):
         system('start iLearnBackupTool')
         self.close()
@@ -607,19 +670,7 @@ class DevOptionWindow(QWidget):
             self.show()
 
     def readSetting(self):
-        if exists('setting.ini'):
-            self.config.read('setting.ini',encoding='utf-8')
-        else:
-            self.config['User']={}
-            self.config['User']['userealfilename']='False'
-            self.config['User']['language'] = '繁體中文'
-            self.config['dev']={}
-            self.config['dev']['nid']=''
-            self.config['dev']['pass']=''
-            self.config['dev']['autologin']='False'
-            self.config['dev']['showloadtime']='False'
-            with open('setting.ini','w',encoding='utf-8') as configfile:
-                self.config.write(configfile)
+        self.config.read('setting.ini',encoding='utf-8')
         self.inp_nid.setText(self.config['dev']['nid'])
         self.inp_pass.setText(self.config['dev']['pass'])
         self.autoLogin.setChecked(self.config['dev'].getboolean('autologin'))
@@ -646,7 +697,25 @@ class UserOptionWindow(QWidget):
         self.config = ConfigParser()
         self.resize(300, 200)
         self.setWindowTitle(string._('Preferences'))
-        self.vbox = QVBoxLayout()
+        main_vbox = QVBoxLayout()
+
+        btn_saveButton = QPushButton(string._('Save and Restart'))
+        btn_saveButton.clicked[bool].connect(self.write)
+        save_hbox = QHBoxLayout()
+        save_hbox.addStretch(1)
+        save_hbox.addWidget(btn_saveButton)
+        save_hbox.addStretch(1)
+
+        main_vbox.addWidget(self.createNormalSettingGroup())
+        main_vbox.addWidget(self.createReDownloadSettingGroup())
+        main_vbox.addWidget(QLabel(string._('New setting will be use on restart.')))
+        main_vbox.addLayout(save_hbox)
+        main_vbox.addStretch(1)
+        self.setLayout(main_vbox)
+
+    def createNormalSettingGroup(self):
+        groupBox = QGroupBox(string._('General setting'))
+        vbox = QVBoxLayout()
         hbox = QHBoxLayout()
         self.combo = QComboBox()
         self.combo.addItem("繁體中文")
@@ -654,24 +723,35 @@ class UserOptionWindow(QWidget):
         self.combo.activated[str].connect(self.setLanguage)
         hbox.addWidget(QLabel(string._('Language')))
         hbox.addWidget(self.combo)
-        self.vbox.addLayout(hbox)
+        vbox.addLayout(hbox)
         self.useRealFileName = QCheckBox(string._('Show original file name in recource list.'))
-        vbox = QVBoxLayout()
         vbox.addWidget(self.useRealFileName)
         vbox.addWidget(QLabel(string._('      *This setting will cause load resouce very slow,\n       please be careful.')))
-        self.vbox.addLayout(vbox)
-        self.vbox.addWidget(QLabel(string._('New setting will be use on restart.')))
-        btn_saveButton = QPushButton(string._('Save and Restart'))
-        btn_saveButton.clicked[bool].connect(self.write)
+        groupBox.setLayout(vbox)
+        return groupBox
+
+    def createReDownloadSettingGroup(self):
+        groupBox = QGroupBox(string._('Retry setting'))
+        vbox = QVBoxLayout()
+        self.inp_redownload_times = QLineEdit()
+        self.inp_redownload_time_between = QLineEdit()
+
+        hbox1 = QHBoxLayout()
+        hbox1.addWidget(QLabel(string._('Retry times:')))
+        hbox1.addWidget(self.inp_redownload_times)
+        hbox1.setStretch(0,5)
+        hbox1.setStretch(1,5)
+
         hbox2 = QHBoxLayout()
-        hbox2.addStretch(1)
-        hbox2.addWidget(btn_saveButton)
-        hbox2.addStretch(1)
+        hbox2.addWidget(QLabel(string._('Second between retry:')))
+        hbox2.addWidget(self.inp_redownload_time_between)
+        hbox2.setStretch(0, 5)
+        hbox2.setStretch(1, 5)
 
-        self.vbox.addLayout(hbox2)
-        self.vbox.addStretch(1)
-        self.setLayout(self.vbox)
-
+        vbox.addLayout(hbox1)
+        vbox.addLayout(hbox2)
+        groupBox.setLayout(vbox)
+        return groupBox
 
     def handle_show(self):
         if self.isVisible()==False:
@@ -679,23 +759,13 @@ class UserOptionWindow(QWidget):
             self.show()
 
     def readSetting(self):
-        if exists('setting.ini'):
-            self.config.read('setting.ini',encoding='utf-8')
-        else:
-            self.config['User']={}
-            self.config['User']['userealfilename']='False'
-            self.config['User']['language']='繁體中文'
-            self.config['dev']={}
-            self.config['dev']['nid']=''
-            self.config['dev']['pass']=''
-            self.config['dev']['autologin']='False'
-            self.config['dev']['showloadtime']='False'
-            with open('setting.ini','w',encoding='utf-8') as configfile:
-                self.config.write(configfile)
+        self.config.read('setting.ini',encoding='utf-8')
         index = self.combo.findText(self.config['User']['language'], QtCore.Qt.MatchFixedString)
         if index >= 0:
             self.combo.setCurrentIndex(index)
         self.useRealFileName.setChecked(self.config['User'].getboolean('userealfilename'))
+        self.inp_redownload_time_between.setText(self.config['User']['secondbetweenretry'])
+        self.inp_redownload_times.setText(self.config['User']['retrytimes'])
 
     def setLanguage(self,lan):
         self.config['User']['language']=lan
