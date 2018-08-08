@@ -18,7 +18,7 @@
 
 ## 使用方法
 包含兩種
-* 一般使用者
+* 一般使用者([影片請點我](https://www.youtube.com/watch?v=Jnds3ZruPoI))
     1. 下載[iLearnBackupTool.exe](https://github.com/fcu-d0441320/iLearnBackupTool/raw/master/iLearnBackupTool.exe)
     2. 雙點開啟程式
     3. 使用自己的NID進行登入
@@ -35,20 +35,24 @@
     8. 打個球聊個天回家收割成果ヽ(✿ﾟ▽ﾟ)ノ
     
 ## 版本資訊
+* v1.1:
+    1. 修正有助教權限的作業頁面，若尚未有人繳交作業會出現錯誤'content-length'
+    2. 修正開發人員選項中，儲存按鈕失效問題
+    3. 更新system函式為Popen以避免出現小黑窗的問題
+    4. 將斷點續傳功能進度條更改為接續上次進度而非本次下載進度
 * v1.0:
     1. 爬取iLearn頁面並下載資源
     2. 自動檢查更新
     3. iLearn資源斷點續傳功能
-    4. 失敗列表自動重試功能
+    4. 失敗列表自動重試功能(可在選項->偏好設定內調整)
 
 ## Bug&想做但尚未實做的功能
 > Bug
 >> 1. Learn伺服器拒絕下載時，會導致下載失敗('content-length')
->> 2. 有助教權限的作業頁面，若尚未有人繳交作業也會出現錯誤'content-length'
 >> 
 > 想做但尚未實做的功能
 >> 1. 測驗卷
->> 2. 槽狀資料夾
+>> 2. 巢狀資料夾
 >> 3. 備份成網頁模板(php)
 
 ## 開發環境與套件
@@ -111,7 +115,7 @@ pip install threadpool
     ```shell
     pyrcc5 -o img_qr.py img.qrc
     ```
-    最後再檔案內import img_qr
+    最後在檔案內import img_qr
     並將程式碼的原始路徑前加一個冒號即可
     ```python
         import img_qr
