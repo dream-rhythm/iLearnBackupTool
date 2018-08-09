@@ -174,11 +174,15 @@ class resource(BasicDownloader):
         try:
             url = self.host + '/mod/resource/view.php?id=' + self.Fileinfo['mod_id']  # 生成網址
             r = self.session.get(url)  # 獲取資料
-            html = BeautifulSoup(r.text, 'lxml')  # 使用BeautifulSoup進行分析
-            attachFile = html.find('div', {'class': 'resourceworkaround'})  # 尋找議題內容
-            filename = attachFile.a.text  # 尋找附加檔案
-            url = attachFile.a.get('href')
-
+            #self.print(str(r.headers['Content-Disposition']))
+            if 'Content-Disposition' in r.headers:
+                url = url
+                filename = str(r.headers['Content-Disposition']).split('=')[1][1:-1]
+            else:
+                html = BeautifulSoup(r.text, 'lxml')  # 使用BeautifulSoup進行分析
+                attachFile = html.find('div', {'class': 'resourceworkaround'})  # 尋找議題內容
+                filename = attachFile.a.text  # 尋找附加檔案
+                url = attachFile.a.get('href')
             self.downloadWithRealUrl(url, filename)  # 下載
         except Exception as e:
             self.signal_errorMsg.emit(
