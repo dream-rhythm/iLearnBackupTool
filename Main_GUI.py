@@ -40,7 +40,7 @@ class myGUI(QMainWindow):
         self.DownloadPool = threadpool.ThreadPool(1)
         self.readSetting()
         string.setLanguage(self.config['User']['language'])
-        self.version = 1.1
+        self.version = 1.2
         self.host = 'https://ilearn2.fcu.edu.tw'
         self.statusbar = self.statusBar()
         self.initUI()
