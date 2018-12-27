@@ -85,7 +85,7 @@ class BasicDownloader(QtCore.QThread):  # 定義BasicDownloader(需繼承Qt控�
         # 注意Exception!
         pass
 
-    def downloadWithRealUrl(self, url, filename):  # 實際下載程式(於新開執行緒進行下載)
+    def downloadWithRealUrl(self, url, filename,sendFinishSignal=True):  # 實際下載程式(於新開執行緒進行下載)
         try:
             self.signal_startDownlooad.emit()  # 發送下載開始的訊號
             self.DownloadReady = 0  # 已下載之區塊歸零
@@ -117,7 +117,8 @@ class BasicDownloader(QtCore.QThread):  # 定義BasicDownloader(需繼承Qt控�
                     if fileSize != 0:  # 如果有檔案總長度
                         self.signal_processBar.emit(offset / fileSize)  # 使用emit函式發出"更新進度條"之訊號
             self.speedCountTimer.stop()  # 下載完要中止計時器
-            self.signal_finishDownload.emit()  # 下載完成後發出"下載完成之訊號"
+            if sendFinishSignal:
+                self.signal_finishDownload.emit()  # 下載完成後發出"下載完成之訊號"
         except Exception as e:
             self.speedCountTimer.stop()  # 發生錯誤時要中止計時器
             self.signal_errorMsg.emit(
@@ -203,7 +204,7 @@ class url(BasicDownloader):
             url = self.host + '/mod/url/view.php?id=' + self.Fileinfo['mod_id']  # 生成網址
             r = self.session.get(url)  # 獲取資料
             html = BeautifulSoup(r.text, 'lxml')  # 使用BeautifulSoup進行分析
-            realUrl = html.find('div', {'class': 'urlworkaround'}).a.get('href')  # 尋找網址
+            realUrl = html.find('div', {'class': 'urlworkaround'}).a.get('href').replace('%','%%')  # 尋找網址
             lnk = ConfigParser()  # 設定捷徑參數
             lnk['{000214A0-0000-0000-C000-000000000046}'] = {}
             lnk['{000214A0-0000-0000-C000-000000000046}']['Prop3'] = '19,11'
@@ -222,6 +223,10 @@ class url(BasicDownloader):
 class assign(BasicDownloader):
     def __init__(self):  # 初始化
         super().__init__()  # 初始化父類別
+    def saveTextBox(self,html,path):
+        path = self.path+'/'+path
+        with open(path,mode='w') as file:
+            file.write(html)
 
     def HtmlPaser(self):  # 重載HtmlPaser
         try:
@@ -247,10 +252,20 @@ class assign(BasicDownloader):
                 HasSubmit = html.find('td', {'class': 'submissionstatussubmitted cell c1 lastcol'})
                 if HasSubmit != None:
                     box = html.find('div', {'class': 'box boxaligncenter submissionsummarytable'})
-                    file = box.find('a')
-                    realUrl = file.get('href')
-                    filename = self.Fileinfo['name'].rstrip() + '/' + file.text
-                    self.downloadWithRealUrl(realUrl, filename)  # 下載
+                    #print(box)
+                    textBox = box.find('div',{'class':'no-overflow'})
+                    if textBox != None:
+                        filename = self.Fileinfo['name'].rstrip() + '/提交的文字.html'
+                        self.saveTextBox(str(textBox), filename)
+                    filebox = box.find('div',{'id':'assign_files_tree5c24d28b36dd14'})
+                    if filebox != None:
+                        #print(filebox)
+                        file = box.find('a')
+                        realUrl = file.get('href')
+                        if 'ilearn2.fcu.edu.tw' in realUrl:
+                            filename = self.Fileinfo['name'].rstrip() + '/' + file.text
+                            self.downloadWithRealUrl(realUrl, filename,False)  # 下載
+                    self.signal_finishDownload.emit()
                 else:
                     self.signal_finishDownload.emit()
         except Exception as e:
