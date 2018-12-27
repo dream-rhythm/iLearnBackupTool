@@ -12,7 +12,7 @@ class iLearnManager(QWidget):
     signal_setStatusProcessBar=pyqtSignal(int,int)
     signal_setStatusBarText = pyqtSignal(str)
 
-    def __init__(self, host='http://ilearn2.fcu.edu.tw',lan='繁體中文'):
+    def __init__(self, host='https://ilearn2.fcu.edu.tw',lan='繁體中文'):
         super(iLearnManager,self).__init__()
         self.web = requests.Session()
         self.NID = ""
@@ -45,6 +45,7 @@ class iLearnManager(QWidget):
         page = self.web.get(self.host+"/login/index.php")
         html = BeautifulSoup(page.text, 'lxml')
         form_login = html.find('form', id='login')
+        self.loginToken = html.find('input', {'name':'logintoken'}).attrs['value']
 
         if form_login is not None:
             return True
@@ -56,7 +57,7 @@ class iLearnManager(QWidget):
         self.Pass = Password
 
     def Login(self):
-        payload = {'username': self.NID, 'password': self.Pass}
+        payload = {'username': self.NID, 'password': self.Pass,'logintoken':self.loginToken}
         page = self.web.post(self.host+'/login/index.php', data=payload)
         html = BeautifulSoup(page.text, 'lxml')
         img_userpicture = html.find('img', {'class':'userpicture'})
@@ -84,35 +85,38 @@ class iLearnManager(QWidget):
         if showTime:
             self.print(self.string._('Load page %s  in %.3f sec.')%(classInfo['title'],tStop-tStart))
         soup = BeautifulSoup(r.text, 'lxml')
-        div_main = soup.find_all('ul', {"class": "topics"})[0]
-        div_section = div_main.find_all('li',{'role':'region'})
         ResourceList = []
-        for section in div_section:
-            try:
-                section_name = section.find_all('h3', {'class': 'sectionname'})[0].text
-            except:
-                section_name = section.get('aria-label')
-            try:
-                UrlList = section.contents[2].ul.contents
-            except:
-                UrlList = []
-            resourceInSection=[]
-            for url in UrlList:
+        try:
+            div_main = soup.find_all('ul', {"class": "topics"})[0]
+            div_section = div_main.find_all('li',{'role':'region'})
+            for section in div_section:
                 try:
-                    url = url.find_all('a')[0]
-                    href = url.get('href')
-                    mod = href.split('/mod/')[1].split('/view')[0]
-                    mod_id = href.split('?id=')[1].split('"')[0]
-                    mod_name = url.find_all('span', {'class': 'instancename'})[0]
-                    if mod_name.span is not None:
-                        mod_name.span.decompose()
-                    mod_name = mod_name.text
-                    path = classInfo['title'] + '/' + self.removeIllageWord(section_name)
-                    resourceInSection.append({'path': path, 'mod': mod, 'mod_id': mod_id, 'name': self.removeIllageWord(mod_name)})
+                    section_name = section.find_all('h3', {'class': 'sectionname'})[0].text
                 except:
-                    pass
-            if len(resourceInSection) != 0:
-                ResourceList.append({'name':section_name,'mods':resourceInSection})
+                    section_name = section.get('aria-label')
+                try:
+                    UrlList = section.contents[2].ul.contents
+                except:
+                    UrlList = []
+                resourceInSection=[]
+                for url in UrlList:
+                    try:
+                        url = url.find_all('a')[0]
+                        href = url.get('href')
+                        mod = href.split('/mod/')[1].split('/view')[0]
+                        mod_id = href.split('?id=')[1].split('"')[0]
+                        mod_name = url.find_all('span', {'class': 'instancename'})[0]
+                        if mod_name.span is not None:
+                            mod_name.span.decompose()
+                        mod_name = mod_name.text
+                        path = classInfo['title'] + '/' + self.removeIllageWord(section_name)
+                        resourceInSection.append({'path': path, 'mod': mod, 'mod_id': mod_id, 'name': self.removeIllageWord(mod_name)})
+                    except:
+                        pass
+                if len(resourceInSection) != 0:
+                    ResourceList.append({'name':section_name,'mods':resourceInSection})
+        except:
+            pass
         return ResourceList
 
     def removeIllageWord(self, string):
