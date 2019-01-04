@@ -40,7 +40,7 @@ class myGUI(QMainWindow):
         self.DownloadPool = threadpool.ThreadPool(1)
         self.readSetting()
         string.setLanguage(self.config['User']['language'])
-        self.version = 1.1
+        self.version = 1.3
         self.host = 'https://ilearn2.fcu.edu.tw'
         self.statusbar = self.statusBar()
         self.initUI()
@@ -388,7 +388,7 @@ class myGUI(QMainWindow):
 
     def ShowResource(self):
         self.CourseTreeList.setEnabled(True)
-        self.courseList = self.web.getCourseList()
+        self.courseList = self.web.getCourseList(self.config['User'].getboolean('showoldtacourse'))
 
         for course in self.courseList:
             courseItem = QTreeWidgetItem(self.CourseTreeListRoot)
@@ -646,12 +646,14 @@ class myGUI(QMainWindow):
             OPTION = self.config.get('User', 'language')
             OPTION = self.config.get('User', 'retrytimes')
             OPTION = self.config.get('User', 'secondbetweenretry')
+            OPTION = self.config.get('User','showoldtacourse')
             OPTION = self.config.get('dev', 'nid')
             OPTION = self.config.get('dev', 'pass')
             OPTION = self.config.get('dev', 'showloadtime')
         except:
             self.config['User'] = {}
             self.config['User']['userealfilename'] = 'False'
+            self.config['User']['showoldtacourse'] = 'False'
             self.config['User']['language'] = '繁體中文'
             self.config['dev'] = {}
             self.config['dev']['nid'] = ''
@@ -768,6 +770,8 @@ class UserOptionWindow(QWidget):
         hbox.addWidget(QLabel(string._('Language')))
         hbox.addWidget(self.combo)
         vbox.addLayout(hbox)
+        self.showOldTACourse = QCheckBox(string._('Show old course which has TA permission.'))
+        vbox.addWidget(self.showOldTACourse)
         self.useRealFileName = QCheckBox(string._('Show original file name in recource list.'))
         vbox.addWidget(self.useRealFileName)
         vbox.addWidget(
@@ -808,6 +812,7 @@ class UserOptionWindow(QWidget):
         index = self.combo.findText(self.config['User']['language'], QtCore.Qt.MatchFixedString)
         if index >= 0:
             self.combo.setCurrentIndex(index)
+        self.showOldTACourse.setChecked(self.config['User'].getboolean('showoldtacourse'))
         self.useRealFileName.setChecked(self.config['User'].getboolean('userealfilename'))
         self.inp_redownload_time_between.setText(self.config['User']['secondbetweenretry'])
         self.inp_redownload_times.setText(self.config['User']['retrytimes'])
@@ -817,6 +822,7 @@ class UserOptionWindow(QWidget):
 
     def write(self):
         self.config['User']['userealfilename'] = str(self.useRealFileName.isChecked())
+        self.config['User']['showoldtacourse'] = str(self.showOldTACourse.isChecked())
         with open('setting.ini', 'w', encoding='utf-8') as configfile:
             self.config.write(configfile)
         self.signal_restart.emit()

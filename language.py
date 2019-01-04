@@ -79,7 +79,8 @@ class string:
                               'Update is in process...':'程式更新中...',
                               'Download success!':'下載成功!',
                               'Oops! Something error!':'噢奧!出錯了!',
-                              'iLearnBackupTool Updater':'iLearn備份工具 更新程式'
+                              'iLearnBackupTool Updater':'iLearn備份工具 更新程式',
+                              'Show old course which has TA permission.':'顯示已隱藏但具TA權限之課程'
                      }
         self.English_Strings={'tool Information':'iLearn Backup Tool\nTool version：%.1f\nDeveloper:夢o旋律(陳琮斌),Aimerfan(簡瑞梓)'}
         self.LANGUAGE = '繁體中文'

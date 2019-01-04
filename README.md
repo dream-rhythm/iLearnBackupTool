@@ -35,6 +35,12 @@
     8. 打個球聊個天回家收割成果ヽ(✿ﾟ▽ﾟ)ノ
     
 ## 版本資訊
+* v1.2:
+    1. 修正因iLearn加入loginToken及SSL加密導致無法連線的問題
+    2. 修正因部分課程找不到資源而導致程式凍結的bug
+    3. 修正URL模組中若連結帶有%字符會導致python無法解析的問題
+    4. 修正因作業繳交文字中存在鏈結導致誤判為檔案的問題
+    5. 新增支援作業為免提交檔案，只有文字之支援
 * v1.1:
     1. 修正有助教權限的作業頁面，若尚未有人繳交作業會出現錯誤'content-length'
     2. 修正開發人員選項中，儲存按鈕失效問題
@@ -54,6 +60,9 @@
 >> 1. 測驗卷
 >> 2. 巢狀資料夾
 >> 3. 備份成網頁模板(php)
+>> 4. 備份已對學生關閉，但仍具助教權限可存取之課程
+> 無法實作的功能
+>> 1.因iLearn權限問題，無法下載已關閉之課程資源
 
 ## 開發環境與套件
 * Windows 10
@@ -62,11 +71,13 @@
 * PyQt5
 * Pyinstller-dev
 * BeautifulSoup
+* lxml
+* requests
 * threadpool
 ```shell
 pip install PyQt5
 pip install https://github.com/pyinstaller/pyinstaller/archive/develop.zip
-pip install BeautifulSoup
+pip install BeautifulSoup,lxml,requests
 pip install threadpool
 ```
 ## 教學資源
