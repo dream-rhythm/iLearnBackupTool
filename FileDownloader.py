@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup  # 匯入網頁分析模組
 import img_qr  # 匯入圖片
 from PyQt5 import QtCore  # 匯入Qt5\核心
 from configparser import ConfigParser
+import json
 import language
 
 
@@ -210,9 +211,9 @@ class url(BasicDownloader):
             lnk['{000214A0-0000-0000-C000-000000000046}']['Prop3'] = '19,11'
             lnk['InternetShortcut'] = {}
             lnk['InternetShortcut']['IDList'] = ''
-            lnk['InternetShortcut']['URL'] = str(realUrl)
             with open(self.path + '/' + self.Fileinfo['name'] + '.url', mode='w') as f:  # 寫出到檔案
                 lnk.write(f)
+                f.write('Url = %s\n'%realUrl)
             self.signal_finishDownload.emit()
         except Exception as e:
             self.signal_errorMsg.emit(
@@ -256,7 +257,8 @@ class assign(BasicDownloader):
                     textBox = box.find('div',{'class':'no-overflow'})
                     if textBox != None:
                         filename = self.Fileinfo['name'].rstrip() + '/提交的文字.html'
-                        self.saveTextBox(str(textBox), filename)
+                        text = str(textBox).replace('\xa0',' ')
+                        self.saveTextBox(text, filename)
                     filebox = box.find('div',{'id':'assign_files_tree5c24d28b36dd14'})
                     if filebox != None:
                         #print(filebox)
@@ -297,15 +299,35 @@ class videos(BasicDownloader):
     def __init__(self):  # 初始化
         super().__init__()  # 初始化父類別
 
+    def saveUrlLink(self,url,filenmae):
+        realUrl = url.replace('%', '%%')  # 尋找網址
+        lnk = ConfigParser()  # 設定捷徑參數
+        lnk['{000214A0-0000-0000-C000-000000000046}'] = {}
+        lnk['{000214A0-0000-0000-C000-000000000046}']['Prop3'] = '19,11'
+        lnk['InternetShortcut'] = {}
+        lnk['InternetShortcut']['IDList'] = ''
+        lnk['InternetShortcut']['URL'] = str(realUrl)
+        with open(self.path + '/' + filenmae + '.url', mode='w') as f:  # 寫出到檔案
+            lnk.write(f)
+        self.signal_finishDownload.emit()
+
     def HtmlPaser(self):  # 重載HtmlPaser
         try:
             url = self.host + '/mod/videos/view.php?id=' + self.Fileinfo['mod_id']  # 生成網址
             r = self.session.get(url)  # 獲取資料
             html = BeautifulSoup(r.text, 'lxml')  # 使用BeautifulSoup進行分析
-            video = html.find('video').source.get('src')  # 尋找議題內容
-            videoType = video.split('/')[-1].split('.')[-1]
-            filename = self.Fileinfo['name'] + '.' + videoType
-            self.downloadWithRealUrl(video, filename)
+            video = html.find('video').source  # 尋找議題內容
+            if type(video) != type(None):
+                videoSrc = video.get('src')
+                videoType = videoSrc.split('/')[-1].split('.')[-1]
+                filename = self.Fileinfo['name'] + '.' + videoType
+                self.downloadWithRealUrl(videoSrc, filename)
+            else:
+                JSON = html.find('video').get('data-setup')
+                data = json.loads(JSON)
+                link = data['sources'][0]['src']
+                self.saveUrlLink(link,self.Fileinfo['name'])
+
         except Exception as e:
             self.signal_errorMsg.emit(
                 self.string._('There has some exception when download %s/%s, so download failed...\nException:') % (

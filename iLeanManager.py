@@ -67,11 +67,11 @@ class iLearnManager(QWidget):
         else:
             return False, ''
 
-    def getCourseList(self):
+    def getCourseList(self,showOldTACourse):
         r = self.web.get(self.host)
         soup = BeautifulSoup(r.text, 'lxml')
         div_course = soup.find_all('div', {"style": "font-size:1.1em;font-weight:bold;line-height:20px;"})
-        CourseList = [div.a.attrs for div in div_course if 'class' not in div.a.attrs]
+        CourseList = [div.a.attrs for div in div_course if 'class' not in div.a.attrs or showOldTACourse]
         for ele in CourseList:
             ele['id'] = ele['href'][-5:]
             del ele['href']
@@ -165,7 +165,10 @@ class iLearnManager(QWidget):
         if showTime:
             self.print(self.string._('Load discuss page %s  in %.3f sec.') % (info['name'], tStop - tStart))
         soup = BeautifulSoup(r.text, 'lxml')
-        folderName = soup.find_all('div',{'role': 'main'})[0].h2.text
+        try:
+            folderName = soup.find_all('div',{'role': 'main'})[0].h2.text
+        except:
+            folderName = soup.find('p',{'class':'tree_item leaf hasicon active_tree_node'}).a.text
         allTopic = soup.find_all('td', {'class': 'topic starter'})
         for topic in allTopic:
             path = info['path'] + '/' + folderName + '/ '+self.removeIllageWord(topic.text)
