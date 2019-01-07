@@ -15,12 +15,14 @@ class BasicDownloader(QtCore.QThread):  # 定義BasicDownloader(需繼承Qt控�
     signal_setStatusProcessBar = QtCore.pyqtSignal(int, int)  # 定義修改進度條之訊號(index,value)
     signal_setStatusBarText = QtCore.pyqtSignal(str)
     signal_startDownlooad = QtCore.pyqtSignal()
+    signal_stopDownloadSpeedTimer = QtCore.pyqtSignal()
 
     def __init__(self):  # 定義建構子
         super().__init__()  # 初始化父類別
         self.signal_processBar.connect(self.ChangeProcessBarValue)  # 將收到"修改進度條"之訊號時的動作綁定副程式
         self.signal_finishDownload.connect(self.FinishDownload)  # 將收到"下載完成"之訊號時的動作綁定副程式
         self.signal_errorMsg.connect(self.showError)  # 將收到"有錯誤發生時"之訊號時的動作綁定副程式
+        self.signal_stopDownloadSpeedTimer.connect(self.stopDownloadSpeedTimer)
         self.string = language.string()  # 建立語言檔
         self.signal_startDownlooad.connect(self.startDownloadSpeedTimer)  # 將開始更新下載速率的信號連接到更新的副程式
         self.speedCountTimer = QtCore.QTimer()  # 建立定時更新下載速率的計時器
@@ -34,6 +36,8 @@ class BasicDownloader(QtCore.QThread):  # 定義BasicDownloader(需繼承Qt控�
 
     def startDownloadSpeedTimer(self):  # 開始下載速率定時器的副程式
         self.speedCountTimer.start(self.ms)  # 開始計時器
+    def stopDownloadSpeedTimer(self):
+        self.speedCountTimer.stop()
 
     def setInformation(self, session, Fileinfo, index, host):  # 設定資料
         self.host = host  # 設定moodle主機網址
@@ -102,7 +106,7 @@ class BasicDownloader(QtCore.QThread):  # 定義BasicDownloader(需繼承Qt控�
                 fileSize = 0
             if path.exists(self.path + '/' + filename):  # 判斷這個檔案是否已存在
                 if path.getsize(self.path + '/' + filename) == fileSize:  # 判斷檔案是否已下載完成
-                    self.speedCountTimer.stop()  # 下載完成要發送停止顯示速率的訊號
+                    self.signal_stopDownloadSpeedTimer.emit()  # 下載完成要發送停止顯示速率的訊號
                     self.signal_finishDownload.emit()  # 若已下載完成直接發出"下載完成之訊號"
                     return  # 然後離開副程式
                 else:  # 如果還沒有下載完成
@@ -116,11 +120,11 @@ class BasicDownloader(QtCore.QThread):  # 定義BasicDownloader(需繼承Qt控�
                     offset += len(data)  # 更新已下載之大小
                     if fileSize != 0:  # 如果有檔案總長度
                         self.signal_processBar.emit(offset / fileSize)  # 使用emit函式發出"更新進度條"之訊號
-            self.speedCountTimer.stop()  # 下載完要中止計時器
+            self.signal_stopDownloadSpeedTimer.emit()  # 下載完要中止計時器
             if sendFinishSignal:
                 self.signal_finishDownload.emit()  # 下載完成後發出"下載完成之訊號"
         except Exception as e:
-            self.speedCountTimer.stop()  # 發生錯誤時要中止計時器
+            self.signal_stopDownloadSpeedTimer.emit()  # 發生錯誤時要中止計時器
             self.signal_errorMsg.emit(
                 self.string._('There has some exception when download %s, so download failed...\nException:') % (
                     filename) + str(e))  # 然後將錯誤寫到log
@@ -252,19 +256,19 @@ class assign(BasicDownloader):
                 HasSubmit = html.find('td', {'class': 'submissionstatussubmitted cell c1 lastcol'})
                 if HasSubmit != None:
                     box = html.find('div', {'class': 'box boxaligncenter submissionsummarytable'})
-                    #print(box)
                     textBox = box.find('div',{'class':'no-overflow'})
                     if textBox != None:
                         filename = self.Fileinfo['name'].rstrip() + '/提交的文字.html'
                         self.saveTextBox(str(textBox), filename)
-                    filebox = box.find('div',{'id':'assign_files_tree5c24d28b36dd14'})
-                    if filebox != None:
-                        #print(filebox)
-                        file = box.find('a')
-                        realUrl = file.get('href')
-                        if 'ilearn2.fcu.edu.tw' in realUrl:
-                            filename = self.Fileinfo['name'].rstrip() + '/' + file.text
-                            self.downloadWithRealUrl(realUrl, filename,False)  # 下載
+                    filebox = [ele for ele in box.findAll('td',{'class':'cell c0'}) if ele.text=='提交檔案']
+                    if len(filebox) != 0:
+                        box = filebox[0].findNext('td')
+                        fileList = box.findAll('a')
+                        for file in fileList:
+                            realUrl = file.get('href')
+                            if 'ilearn2.fcu.edu.tw' in realUrl:
+                                filename = self.Fileinfo['name'].rstrip() + '/' + file.text
+                                self.downloadWithRealUrl(realUrl, filename,False)  # 下載
                     self.signal_finishDownload.emit()
                 else:
                     self.signal_finishDownload.emit()
