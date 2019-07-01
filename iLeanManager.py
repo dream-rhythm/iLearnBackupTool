@@ -62,7 +62,7 @@ class iLearnManager(QWidget):
         html = BeautifulSoup(page.text, 'lxml')
         img_userpicture = html.find('img', {'class':'userpicture'})
         if img_userpicture is not None:
-            userName = img_userpicture.get('title').split(' ')[1][:-3]
+            userName = img_userpicture.get('title').split('的')[0]
             return True, userName
         else:
             return False, ''
