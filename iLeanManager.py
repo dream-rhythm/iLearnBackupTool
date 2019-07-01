@@ -97,7 +97,10 @@ class iLearnManager(QWidget):
                 try:
                     UrlList = section.contents[3].ul.contents
                 except:
-                    UrlList = []
+                    try:
+                        UrlList = section.contents[2].ul.contents
+                    except:
+                        UrlList = []
                 resourceInSection=[]
                 for url in UrlList:
                     try:
