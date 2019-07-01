@@ -50,7 +50,7 @@ class string:
                               'Downloading...(%d/%d)':'正在下載...(%d/%d)',
                               'Start to download %dth file':'開始下載第 %d 個檔案',
                               'Loading file list':'正在獲取檔案清單',
-                              'tool Information':'iLearn備份工具\n工具版本：%.1f\n開發者:夢o旋律(陳琮斌),Aimerfan(簡瑞梓)',
+                              'tool Information':'iLearn備份工具\n工具版本：%.2f\n開發者:夢o旋律(陳琮斌),Aimerfan(簡瑞梓)',
                               'Testing connection with iLearn2...':'正在測試iLearn2的連線...',
                               'Connecting...':'連線中...',
                               'Connect to iLearn2 success!':'iLearn2連線成功!',
