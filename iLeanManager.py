@@ -95,7 +95,7 @@ class iLearnManager(QWidget):
                 except:
                     section_name = section.get('aria-label')
                 try:
-                    UrlList = section.contents[2].ul.contents
+                    UrlList = section.contents[3].ul.contents
                 except:
                     UrlList = []
                 resourceInSection=[]
